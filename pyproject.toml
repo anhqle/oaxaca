@@ -17,6 +17,9 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
+dependencies = [
+    "statsmodels>=0.14.5",
+]
 
 [project.urls]
 Homepage = "https://anhqle.github.io/oaxaca/"
@@ -35,6 +38,7 @@ dev = [
     "mkdocs>=1.4.2",
     "mkdocs-material>=8.5.10",
     "mkdocstrings[python]>=0.26.1",
+    "notebook>=7.4.5",
 ]
 
 [build-system]
