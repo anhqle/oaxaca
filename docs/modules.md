@@ -1,1 +1,1 @@
-::: oaxaca.foo
+::: oaxaca
