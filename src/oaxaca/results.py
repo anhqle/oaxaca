@@ -1,8 +1,7 @@
-from typing import List, Optional, Any, Dict, TYPE_CHECKING
 from functools import cached_property
+from typing import TYPE_CHECKING, Any, Optional
+
 import pandas as pd
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 if TYPE_CHECKING:
     from .oaxaca import Oaxaca
@@ -207,10 +206,10 @@ class OaxacaResults:
         unexplained_detailed: pd.Series,
         X_diff: pd.Series,
         coef_nondiscriminatory: pd.Series,
-        weights: Dict[Any, float],
+        weights: dict[Any, float],
         mean_X_0: pd.Series,
         mean_X_1: pd.Series,
-        categorical_mapping: Dict,
+        categorical_mapping: dict,
         direction: str,
     ):
         # Store reference to the original Oaxaca instance for context
@@ -258,7 +257,7 @@ class OaxacaResults:
               'has_removals': bool,
             }
         """
-        by_group: Dict[Any, Dict[str, Any]] = {}
+        by_group: dict[Any, dict[str, Any]] = {}
         if not hasattr(self._oaxaca, "dummy_removal_result_") or not self._oaxaca.dummy_removal_result_:
             return {
                 "by_group": by_group,
@@ -281,10 +280,7 @@ class OaxacaResults:
                 if removed:
                     # Calculate how much removals shifted this group's mean
                     # Handle pandas Series case
-                    if hasattr(pre, "iloc"):
-                        pre_val = float(pre.iloc[0])
-                    else:
-                        pre_val = float(pre) if pre is not None else 0.0
+                    pre_val = float(pre.iloc[0]) if hasattr(pre, "iloc") else float(pre) if pre is not None else 0.0
 
                     if hasattr(post, "iloc"):
                         post_val = float(post.iloc[0])
@@ -307,14 +303,15 @@ class OaxacaResults:
         groups = self._oaxaca.groups_
         adj_0 = by_group.get(groups[0], {}).get("mean_adjustment", 0.0)
         adj_1 = by_group.get(groups[1], {}).get("mean_adjustment", 0.0)
-        if self.direction == "group0 - group1":
-            removal_contribution = adj_0 - adj_1
-        else:
-            removal_contribution = adj_1 - adj_0
+        removal_contribution = adj_0 - adj_1 if self.direction == "group0 - group1" else adj_1 - adj_0
 
-        removal_contribution_pct = (removal_contribution / abs(self.total_difference) * 100) if abs(self.total_difference) > 1e-10 else 0
+        removal_contribution_pct = (
+            (removal_contribution / abs(self.total_difference) * 100) if abs(self.total_difference) > 1e-10 else 0
+        )
 
-        has_removals = any(len(g.get("removed_dummies", [])) > 0 for g in by_group.values()) and abs(removal_contribution) > 1e-10
+        has_removals = (
+            any(len(g.get("removed_dummies", [])) > 0 for g in by_group.values()) and abs(removal_contribution) > 1e-10
+        )
 
         return {
             "by_group": by_group,
@@ -339,9 +336,14 @@ class OaxacaResults:
         detailed_df = self.detailed_contributions
 
         # Group by the first level of MultiIndex (Variable_Group) and sum
-        aggregated = detailed_df.groupby(level="Variable_Group").agg(
-            {"Mix-shift": "sum", "Within-slice": "sum", "Total": "sum", "Mix-shift %": "sum", "Within-slice %": "sum", "Total %": "sum"}
-        )
+        aggregated = detailed_df.groupby(level="Variable_Group").agg({
+            "Mix-shift": "sum",
+            "Within-slice": "sum",
+            "Total": "sum",
+            "Mix-shift %": "sum",
+            "Within-slice %": "sum",
+            "Total %": "sum",
+        })
 
         # Reset index to make Variable_Group a regular column
         aggregated = aggregated.reset_index()
@@ -382,8 +384,12 @@ class OaxacaResults:
             total_val = explained_val + unexplained_val
 
             # Calculate percentages
-            explained_pct = (explained_val / abs(self.total_difference) * 100) if abs(self.total_difference) > 1e-10 else 0
-            unexplained_pct = (unexplained_val / abs(self.total_difference) * 100) if abs(self.total_difference) > 1e-10 else 0
+            explained_pct = (
+                (explained_val / abs(self.total_difference) * 100) if abs(self.total_difference) > 1e-10 else 0
+            )
+            unexplained_pct = (
+                (unexplained_val / abs(self.total_difference) * 100) if abs(self.total_difference) > 1e-10 else 0
+            )
             total_pct = (total_val / abs(self.total_difference) * 100) if abs(self.total_difference) > 1e-10 else 0
 
             if var_name in dummy_to_categorical:
@@ -397,17 +403,15 @@ class OaxacaResults:
                 index_tuples.append((var_name, var_name))
                 variable_type = "continuous"
 
-            data_rows.append(
-                {
-                    "Mix-shift": explained_val,
-                    "Within-slice": unexplained_val,
-                    "Total": total_val,
-                    "Mix-shift %": explained_pct,
-                    "Within-slice %": unexplained_pct,
-                    "Total %": total_pct,
-                    "Variable_Type": variable_type,
-                }
-            )
+            data_rows.append({
+                "Mix-shift": explained_val,
+                "Within-slice": unexplained_val,
+                "Total": total_val,
+                "Mix-shift %": explained_pct,
+                "Within-slice %": unexplained_pct,
+                "Total %": total_pct,
+                "Variable_Type": variable_type,
+            })
 
         # Create MultiIndex DataFrame
         index = pd.MultiIndex.from_tuples(index_tuples, names=["Variable_Group", "Category"])
@@ -507,8 +511,12 @@ class OaxacaResults:
         total_row_explained = self.explained
         total_row_unexplained = self.unexplained
         total_row_total = self.total_difference
-        total_explained_pct = (total_row_explained / abs(self.total_difference) * 100) if abs(self.total_difference) > 1e-10 else 0
-        total_unexplained_pct = (total_row_unexplained / abs(self.total_difference) * 100) if abs(self.total_difference) > 1e-10 else 0
+        total_explained_pct = (
+            (total_row_explained / abs(self.total_difference) * 100) if abs(self.total_difference) > 1e-10 else 0
+        )
+        total_unexplained_pct = (
+            (total_row_unexplained / abs(self.total_difference) * 100) if abs(self.total_difference) > 1e-10 else 0
+        )
         total_pct = 100.0 if abs(self.total_difference) > 1e-10 else 0
 
         lines.append('<tr style="font-weight: bold; background-color: #e9ecef; border-top: 2px solid #333;">')
@@ -590,7 +598,7 @@ class OaxacaResults:
         """
         return html
 
-    def print_ols(self, out: List[str] = ["diff"], display_len: Optional[int] = None):
+    def print_ols(self, display_len: Optional[int] = None):
         """Print OLS regression results for each group.
 
         Parameters
@@ -604,314 +612,78 @@ class OaxacaResults:
             Maximum length for variable names in output tables. If provided,
             variable names will be truncated to this length.
         """
-        if not out:
-            out = []
+        print("OLS Regression Results by Group")
+        print("=" * 60)
 
-        valid_options = ["group0", "group1", "diff"]
-        for option in out:
-            if option not in valid_options:
-                raise ValueError(f"Invalid option '{option}'. Valid options are: {valid_options}")
+        for _, group in enumerate(self._oaxaca.groups_):
+            model = self._oaxaca.models_[group]
+            group_stats = self._oaxaca.group_stats_[group]
 
-        # Print individual group results if requested
-        if "group0" in out or "group1" in out:
-            print("OLS Regression Results by Group")
-            print("=" * 60)
+            print(f"\nGroup: {group}")
+            print("-" * 40)
+            print(f"Number of observations: {group_stats['n_obs']}")
+            print(f"R-squared: {group_stats['r_squared']:.4f}")
+            print(f"Mean of dependent variable: {group_stats['mean_y']:.4f}")
+            print(f"Std of dependent variable: {group_stats['std_y']:.4f}")
 
-            for i, group in enumerate(self._oaxaca.groups_):
-                group_key = f"group{i}"
-                if group_key not in out:
-                    continue
+            print("\nCoefficients:")
+            print(f"{'Variable':<40} {'Coeff':>10} {'Std Err':>10} {'t':>8} {'P>|t|':>8}")
+            print("-" * 61)
 
-                model = self._oaxaca.models_[group]
-                group_stats = self._oaxaca.group_stats_[group]
-
-                print(f"\nGroup: {group}")
-                print("-" * 40)
-                print(f"Number of observations: {group_stats['n_obs']}")
-                print(f"R-squared: {group_stats['r_squared']:.4f}")
-                print(f"Mean of dependent variable: {group_stats['mean_y']:.4f}")
-                print(f"Std of dependent variable: {group_stats['std_y']:.4f}")
-
-                print("\nCoefficients:")
-                print(f"{'Variable':<40} {'Coeff':>10} {'Std Err':>10} {'t':>8} {'P>|t|':>8}")
-                print("-" * 61)
-
-                for var_name, coeff in model.params.items():
-                    std_err = model.bse[var_name]
-                    t_stat = model.tvalues[var_name]
-                    p_value = model.pvalues[var_name]
-
-                    # Truncate variable name if display_len is specified
-                    display_var_name = _truncate_variable_name(var_name, display_len)
-
-                    print(f"{display_var_name:<40} {coeff:>10.4f} {std_err:>10.4f} {t_stat:>8.3f} {p_value:>8.3f}")
-
-        # Add coefficient comparison table if requested
-        if "diff" in out:
-            # Add spacing if we printed group results above
-            if "group0" in out or "group1" in out:
-                print("\n")
-
-            print("Coefficient Comparison Between Groups")
-            print("=" * 80)
-
-            # Get the two groups
-            group_0, group_1 = self._oaxaca.groups_
-
-            # Determine column order based on direction
-            if self.direction == "group0 - group1":
-                first_group, second_group = group_0, group_1
-                first_label, second_label = f"Group {group_0}", f"Group {group_1}"
-                diff_label = f"{group_0} - {group_1}"
-            else:  # "group1 - group0"
-                first_group, second_group = group_1, group_0
-                first_label, second_label = f"Group {group_1}", f"Group {group_0}"
-                diff_label = f"{group_1} - {group_0}"
-
-            # Get coefficients for both groups
-            coef_first = self._oaxaca.coef_[first_group]
-            coef_second = self._oaxaca.coef_[second_group]
-
-            # Ensure conformable dimensions (handle missing coefficients)
-            coef_first, coef_second = self._oaxaca._ensure_conformable_dimensions(coef_first, coef_second)
-
-            # Calculate difference
-            coef_diff = coef_first - coef_second
-
-            print(f"Direction: {diff_label}")
-            print()
-
-            # Print table header
-            header = f"{'Variable':<40} {first_label:>12} {second_label:>12} {'Difference':>12}"
-            print(header)
-            print("-" * len(header))
-
-            # Print coefficients for each variable
-            for var_name in coef_first.index:
-                first_coef = coef_first[var_name]
-                second_coef = coef_second[var_name]
-                diff_coef = coef_diff[var_name]
+            for var_name, coeff in model.params.items():
+                std_err = model.bse[var_name]
+                t_stat = model.tvalues[var_name]
+                p_value = model.pvalues[var_name]
 
                 # Truncate variable name if display_len is specified
                 display_var_name = _truncate_variable_name(var_name, display_len)
 
-                print(f"{display_var_name:<40} {first_coef:>12.4f} {second_coef:>12.4f} {diff_coef:>12.4f}")
+                print(f"{display_var_name:<40} {coeff:>10.4f} {std_err:>10.4f} {t_stat:>8.3f} {p_value:>8.3f}")
 
-    def plot_waterfall(
-        self,
-        component: str = "both",
-        width: int = 600,
-        height: int = 400,
-        title: Optional[str] = None,
-        color_positive: str = "#2E8B57",
-        color_negative: str = "#DC143C",
-        color_total: str = "#4682B4",
-    ) -> go.Figure:
-        """
-        Create waterfall charts for Oaxaca decomposition results.
+        print("Coefficient Comparison Between Groups")
+        print("=" * 80)
 
-        Parameters
-        ----------
-        component : str, default 'both'
-            Which component to plot: 'explained', 'unexplained', or 'both'
-        width : int, default 600
-            Width of the chart in pixels
-        height : int, default 400
-            Height of the chart in pixels
-        title : str, optional
-            Custom title for the chart. If None, a default title is used
-        color_positive : str, default '#2E8B57'
-            Color for positive contributions (sea green)
-        color_negative : str, default '#DC143C'
-            Color for negative contributions (crimson)
-        color_total : str, default '#4682B4'
-            Color for total bars (steel blue)
+        # Get the two groups
+        group_0, group_1 = self._oaxaca.groups_
 
-        Returns
-        -------
-        go.Figure
-            Plotly figure object containing the waterfall visualization
+        # Determine column order based on direction
+        if self.direction == "group0 - group1":
+            first_group, second_group = group_0, group_1
+            first_label, second_label = f"Group {group_0}", f"Group {group_1}"
+            diff_label = f"{group_0} - {group_1}"
+        else:  # "group1 - group0"
+            first_group, second_group = group_1, group_0
+            first_label, second_label = f"Group {group_1}", f"Group {group_0}"
+            diff_label = f"{group_1} - {group_0}"
 
-        Raises
-        ------
-        ValueError
-            If two_fold() has not been called or if component is invalid
-        """
-        if not hasattr(self, "total_difference"):
-            raise ValueError("Must call two_fold() before plotting waterfall chart")
+        # Get coefficients for both groups
+        coef_first = self._oaxaca.coef_[first_group]
+        coef_second = self._oaxaca.coef_[second_group]
 
-        valid_components = ["explained", "unexplained", "both"]
-        if component not in valid_components:
-            raise ValueError(f"component must be one of {valid_components}")
+        # Ensure conformable dimensions (handle missing coefficients)
+        coef_first, coef_second = self._oaxaca._ensure_conformable_dimensions(coef_first, coef_second)
 
-        # Handle edge cases
-        if len(self.explained_detailed.index) == 0:
-            raise ValueError("No variables found in decomposition results")
+        # Calculate difference
+        coef_diff = coef_first - coef_second
 
-        charts = []
+        print(f"Direction: {diff_label}")
+        print()
 
-        if component in ["explained", "both"]:
-            chart_explained = self._create_waterfall_chart(
-                values=self.explained_detailed,
-                total_value=self.explained,
-                chart_title=title or "Mix-shift Component (Endowments)",
-                width=width,
-                height=height,
-                color_positive=color_positive,
-                color_negative=color_negative,
-                color_total=color_total,
-            )
-            charts.append(chart_explained)
+        # Print table header
+        header = f"{'Variable':<40} {first_label:>12} {second_label:>12} {'Difference':>12}"
+        print(header)
+        print("-" * len(header))
 
-        if component in ["unexplained", "both"]:
-            chart_unexplained = self._create_waterfall_chart(
-                values=self.unexplained_detailed,
-                total_value=self.unexplained,
-                chart_title=title or "Within-slice Component (Coefficients)",
-                width=width,
-                height=height,
-                color_positive=color_positive,
-                color_negative=color_negative,
-                color_total=color_total,
-            )
-            charts.append(chart_unexplained)
+        # Print coefficients for each variable
+        for var_name in coef_first.index:
+            first_coef = coef_first[var_name]
+            second_coef = coef_second[var_name]
+            diff_coef = coef_diff[var_name]
 
-        if len(charts) == 1:
-            return charts[0]
-        else:
-            # Combine charts vertically using subplots
-            fig = make_subplots(
-                rows=len(charts), cols=1, subplot_titles=[chart.layout.title.text for chart in charts], vertical_spacing=0.15
-            )
+            # Truncate variable name if display_len is specified
+            display_var_name = _truncate_variable_name(var_name, display_len)
 
-            for i, chart in enumerate(charts):
-                for trace in chart.data:
-                    fig.add_trace(trace, row=i + 1, col=1)
-
-            fig.update_layout(
-                height=height * len(charts) + 100,  # Increase height for vertical stacking
-                width=width * 1.5,  # Increase width by 50%
-                showlegend=False,
-                bargap=0.5,  # Fix bargap back to 0.5
-                margin=dict(b=100),
-            )
-
-            # Update x-axis properties for each subplot
-            for i in range(len(charts)):
-                fig.update_xaxes(tickangle=0, title_text="Variables", side="bottom", row=i + 1, col=1)
-                fig.update_yaxes(title_text="Contribution", row=i + 1, col=1)
-
-            return fig
-
-    def _create_waterfall_chart(
-        self,
-        values: pd.Series,
-        total_value: float,
-        chart_title: str,
-        width: int,
-        height: int,
-        color_positive: str,
-        color_negative: str,
-        color_total: str,
-    ) -> go.Figure:
-        """
-        Create a single waterfall chart for the given values using Plotly.
-
-        Parameters
-        ----------
-        values : pd.Series
-            The detailed contribution values for each variable
-        total_value : float
-            The total value for this component
-        chart_title : str
-            Title for the chart
-        width : int
-            Width of the chart
-        height : int
-            Height of the chart
-        color_positive : str
-            Color for positive bars
-        color_negative : str
-            Color for negative bars
-        color_total : str
-            Color for total bar
-
-        Returns
-        -------
-        go.Figure
-            Plotly figure object
-        """
-        # Prepare data for waterfall chart
-        variables = []
-        values_list = []
-        colors = []
-        cumulative = 0
-
-        # Add individual variable contributions
-        for var_name, value in values.items():
-            if abs(value) < 1e-10:  # Skip near-zero values
-                continue
-
-            # Add line breaks for long variable names
-            formatted_var_name = _format_variable_name_with_breaks(var_name)
-            variables.append(formatted_var_name)
-            values_list.append(value)
-            colors.append(color_positive if value >= 0 else color_negative)
-            cumulative += value
-
-        # Add total bar
-        variables.append("Total")
-        values_list.append(total_value)
-        colors.append(color_total)
-
-        if not variables:
-            # Handle case where all values are zero
-            variables = ["Total"]
-            values_list = [0]
-            colors = [color_total]
-
-        # Create waterfall chart using Plotly
-        fig = go.Figure()
-
-        # Add waterfall trace
-        fig.add_trace(
-            go.Waterfall(
-                name="",
-                orientation="v",
-                measure=["relative"] * (len(variables) - 1) + ["total"],
-                x=variables,
-                textposition="outside",
-                text=[f"{val:.3f}" for val in values_list],
-                y=values_list,
-                connector={"line": {"color": "gray", "dash": "dot"}},
-                increasing={"marker": {"color": color_positive}},
-                decreasing={"marker": {"color": color_negative}},
-                totals={"marker": {"color": color_total}},
-            )
-        )
-
-        # Update layout with wider bar spacing and no rotation
-        fig.update_layout(
-            title=chart_title,
-            width=width,
-            height=height,
-            showlegend=False,
-            xaxis={
-                "title": {"text": "Variables", "standoff": 20},
-                "tickangle": 0,  # No rotation for x-axis labels
-                "tickmode": "array",
-                "tickvals": list(range(len(variables))),
-                "ticktext": variables,
-                "categoryorder": "array",
-                "categoryarray": variables,
-                "side": "bottom",  # Ensure x-axis is at bottom
-            },
-            yaxis={"title": {"text": "Contribution", "standoff": 20}},
-            bargap=0.5,  # Wider spacing between bars to prevent label overlap
-            margin=dict(b=100),  # Extra bottom margin for multi-line labels
-        )
-
-        return fig
+            print(f"{display_var_name:<40} {first_coef:>12.4f} {second_coef:>12.4f} {diff_coef:>12.4f}")
 
     def x_difference_table(self) -> pd.DataFrame:
         """
@@ -924,14 +696,12 @@ class OaxacaResults:
         """
         # Create DataFrame using the actual mean_X values used in decomposition
         groups = self._oaxaca.groups_
-        df = pd.DataFrame(
-            {
-                "Variable": self.explained_detailed.index.tolist(),
-                f"Group {groups[0]} Mean": self.mean_X_0,
-                f"Group {groups[1]} Mean": self.mean_X_1,
-                "Difference": self.X_diff,
-            }
-        )
+        df = pd.DataFrame({
+            "Variable": self.explained_detailed.index.tolist(),
+            f"Group {groups[0]} Mean": self.mean_X_0,
+            f"Group {groups[1]} Mean": self.mean_X_1,
+            "Difference": self.X_diff,
+        })
 
         return df
 
@@ -964,9 +734,13 @@ class OaxacaResults:
 
         # Print formatted table
         if self.direction == "group0 - group1":
-            header = f"{'Variable':<40} {str(groups[0]) + ' Mean':>15} {str(groups[1]) + ' Mean':>15} {'Difference':>15}"
+            header = (
+                f"{'Variable':<40} {str(groups[0]) + ' Mean':>15} {str(groups[1]) + ' Mean':>15} {'Difference':>15}"
+            )
         elif self.direction == "group1 - group0":
-            header = f"{'Variable':<40} {str(groups[1]) + ' Mean':>15} {str(groups[0]) + ' Mean':>15} {'Difference':>15}"
+            header = (
+                f"{'Variable':<40} {str(groups[1]) + ' Mean':>15} {str(groups[0]) + ' Mean':>15} {'Difference':>15}"
+            )
         print(header)
         print("-" * len(header))
 

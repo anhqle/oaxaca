@@ -1,20 +1,20 @@
-from formulaic import Formula
-import pandas as pd
-import statsmodels.api as sm
-from typing import Literal, Optional, Any, Dict
 import warnings
 
 # Import OaxacaResults from the new results module
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal, Optional
+
+import pandas as pd
+import statsmodels.api as sm
+from formulaic import Formula
 
 if TYPE_CHECKING:
     from .results import OaxacaResults
 
 from .formulaic_utils import (
     dummies,
+    get_base_category,
     term_dummies,
     term_dummies_gu_adjusted,
-    get_base_category,
 )
 
 
@@ -86,7 +86,9 @@ class Oaxaca:
         for group in self.groups_:
             group_mask = data[group_variable] == group
             # ensure_full_rank=True since we want the full-rank model for OLS
-            y_group, X_group = Formula(formula).get_model_matrix(data[group_mask], output="pandas", ensure_full_rank=True)
+            y_group, X_group = Formula(formula).get_model_matrix(
+                data[group_mask], output="pandas", ensure_full_rank=True
+            )
             self.X_model_spec = X_group.model_spec
 
             # Check for zero variance columns, which statsmodels.OLS surprisingly just let through silently
@@ -97,7 +99,10 @@ class Oaxaca:
                 # Identify the problematic columns
                 zero_variance_cols = variances[variances == 0].index.tolist()
                 X_group = X_group.drop(zero_variance_cols, axis=1)
-                warnings.warn(f"Warning: The following columns have zero variance and were removed: {zero_variance_cols}")
+                warnings.warn(
+                    f"Warning: The following columns have zero variance and were removed: {zero_variance_cols}",
+                    stacklevel=2,
+                )
 
             model = sm.OLS(y_group, X_group).fit()
 
@@ -123,9 +128,19 @@ class Oaxaca:
         # Return self to allow method chaining
         return self
 
+    def _validate_weights_input(self, weights):
+        if weights is None:
+            raise ValueError("Weights must be provided")
+        if not isinstance(weights, dict):
+            raise TypeError("Weights must be a dictionary with group values as keys")
+        if set(weights.keys()) != set(self.groups_):
+            raise ValueError(f"Weights keys must match group values: {self.groups_}")
+        if abs(sum(weights.values()) - 1.0) > 1e-10:
+            raise ValueError("Weights must sum to 1.0")
+
     def two_fold(
         self,
-        weights: Optional[Dict[Any, float]] = None,
+        weights: Optional[dict[Any, float]] = None,
         gu_adjustment: Literal["none", "unweighted", "weighted"] = "none",
         direction: Literal["group0 - group1", "group1 - group0"] = "group0 - group1",
     ) -> "OaxacaResults":
@@ -152,16 +167,7 @@ class Oaxaca:
         OaxacaResults
             A new OaxacaResults object with decomposition results
         """
-        # Validate inputs
-        if weights is None:
-            raise ValueError("Weights must be provided")
-        if not isinstance(weights, dict):
-            raise ValueError("Weights must be a dictionary with group values as keys")
-        if set(weights.keys()) != set(self.groups_):
-            raise ValueError(f"Weights keys must match group values: {self.groups_}")
-        if abs(sum(weights.values()) - 1.0) > 1e-10:
-            raise ValueError("Weights must sum to 1.0")
-
+        self._validate_weights_input(weights)
         if gu_adjustment not in ["none", "unweighted", "weighted"]:
             raise ValueError("gu_adjustment must be one of: 'none', 'unweighted', 'weighted'")
         if direction not in ["group0 - group1", "group1 - group0"]:
@@ -185,11 +191,8 @@ class Oaxaca:
 
         # Since we potentially manipulated the indices of coef and mean_X, let's check that their indices
         # are the same, only out of order. pandas won't do so for us
-        assert set(mean_X_0.index) == set(mean_X_1.index) == set(coef_0.index) == set(coef_1.index), (
-            f"mean_X_0 vs mean_X_1 {set(mean_X_0.index).symmetric_difference(set(mean_X_1.index))}",
-            f"coef_0 vs coef_1 {set(coef_0.index).symmetric_difference(set(coef_1.index))}",
-            f"mean_X_0 vs coef_0 {set(mean_X_0.index).symmetric_difference(set(coef_0.index))}",
-        )
+        if not set(mean_X_0.index) == set(mean_X_1.index) == set(coef_0.index) == set(coef_1.index):
+            raise ValueError("Incompatible indices detected")
 
         # Get mean Y values
         mean_y_0 = self.group_stats_[group_0]["mean_y"]
@@ -247,7 +250,9 @@ class Oaxaca:
             # ensure_full_rank=False since we're doing data clean up here, not modeling
             # We don't want the base to interfere with the harmonization
             # For example, when a base is excluded from a group's model matrix, making it appear to not be exclusive to that group
-            y[group], X[group] = Formula(self.formula).get_model_matrix(data.loc[group_mask, :], output="pandas", ensure_full_rank=False)
+            y[group], X[group] = Formula(self.formula).get_model_matrix(
+                data.loc[group_mask, :], output="pandas", ensure_full_rank=False
+            )
             X_model_spec[group] = X[group].model_spec
             # Sometimes the user-supplied formula can result in all-0 dummies, such as when they
             #   specify a categorical level that doesn't exist in the data
@@ -268,7 +273,9 @@ class Oaxaca:
             outcome_pre_removal_val = float(y[this].mean().iloc[0])
             outcome_post_removal_val = float(y[this][~rows_to_remove].mean().iloc[0])
             # May be NaN if no rows removed; float() preserves NaN
-            outcome_among_removed_val = float(y[this][rows_to_remove].mean().iloc[0]) if len(y[this][rows_to_remove]) > 0 else float("nan")
+            outcome_among_removed_val = (
+                float(y[this][rows_to_remove].mean().iloc[0]) if len(y[this][rows_to_remove]) > 0 else float("nan")
+            )
             share_removed_val = float(rows_to_remove.mean())
             mean_adjustment_val = outcome_pre_removal_val - outcome_post_removal_val
 
@@ -335,9 +342,9 @@ class Oaxaca:
                 factor = term.factors[0]
                 contrast_state = self.X_model_spec.factor_contrasts[factor]
                 base_category = get_base_category(contrast_state)
-                base_category_column_name = contrast_state.contrasts.get_factor_format(levels=contrast_state.levels).format(
-                    name=repr(factor), field=base_category
-                )
+                base_category_column_name = contrast_state.contrasts.get_factor_format(
+                    levels=contrast_state.levels
+                ).format(name=repr(factor), field=base_category)
 
                 # Create extended coefficient series including base category (coefficient = 0)
                 extended_coefs = pd.concat([coef[term_slice], pd.Series({base_category_column_name: 0.0})])

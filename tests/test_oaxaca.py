@@ -2,10 +2,11 @@
 Tests for the Oaxaca-Blinder decomposition implementation.
 """
 
-from formulaic import Formula
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
+from formulaic import Formula
+
 from oaxaca import Oaxaca
 from oaxaca.formulaic_utils import (
     term_dummies,
@@ -46,7 +47,7 @@ def test_two_fold_invalid_weights(sample_data):
         model.two_fold(weights={2: 0.5, 3: 0.5})
 
     # Test with non-dictionary weights
-    with pytest.raises(ValueError, match="Weights must be a dictionary"):
+    with pytest.raises(TypeError, match="Weights must be a dictionary"):
         model.two_fold(weights=[0.5, 0.5])
 
 
@@ -98,14 +99,22 @@ def test_twofold_gu_adjustment(sample_data):
     # Check detailed explained components for specific coefficients
     assert np.isclose(results.explained_detailed["age"], -1.7491472)
     assert np.isclose(results.explained_detailed["female"], -0.5230820)
-    assert np.isclose(results.explained_detailed["C(education_level, contr.treatment('high_school'))[high_school]"], 0.3396283)
-    assert np.isclose(results.explained_detailed["C(education_level, contr.treatment('high_school'))[college]"], 0.2565104)
+    assert np.isclose(
+        results.explained_detailed["C(education_level, contr.treatment('high_school'))[high_school]"], 0.3396283
+    )
+    assert np.isclose(
+        results.explained_detailed["C(education_level, contr.treatment('high_school'))[college]"], 0.2565104
+    )
 
     # Check detailed unexplained components for specific coefficients
     assert np.isclose(results.unexplained_detailed["age"], 7.55853070)
     assert np.isclose(results.unexplained_detailed["female"], -1.16526457)
-    assert np.isclose(results.unexplained_detailed["C(education_level, contr.treatment('high_school'))[high_school]"], 0.25712310)
-    assert np.isclose(results.unexplained_detailed["C(education_level, contr.treatment('high_school'))[college]"], 0.58246411)
+    assert np.isclose(
+        results.unexplained_detailed["C(education_level, contr.treatment('high_school'))[high_school]"], 0.25712310
+    )
+    assert np.isclose(
+        results.unexplained_detailed["C(education_level, contr.treatment('high_school'))[college]"], 0.58246411
+    )
 
     # Check intercept, which was also adjusted by GU adjustment
     assert np.isclose(results.explained_detailed["Intercept"], 0.0)
@@ -122,24 +131,20 @@ def test_common_support():
     n = 100
 
     # Group 0 has categories A, B, C
-    group_0_data = pd.DataFrame(
-        {
-            "group": [0] * (n // 2),
-            "category": np.random.choice(["A", "B", "C"], n // 2),
-            "continuous_var": np.random.normal(0, 1, n // 2),
-            "outcome": np.random.normal(10, 2, n // 2),
-        }
-    )
+    group_0_data = pd.DataFrame({
+        "group": [0] * (n // 2),
+        "category": np.random.choice(["A", "B", "C"], n // 2),
+        "continuous_var": np.random.normal(0, 1, n // 2),
+        "outcome": np.random.normal(10, 2, n // 2),
+    })
 
     # Group 1 has categories B, C, D (missing A, has extra D)
-    group_1_data = pd.DataFrame(
-        {
-            "group": [1] * (n // 2),
-            "category": np.random.choice(["B", "C", "D"], n // 2),
-            "continuous_var": np.random.normal(0, 1, n // 2),
-            "outcome": np.random.normal(12, 2, n // 2),
-        }
-    )
+    group_1_data = pd.DataFrame({
+        "group": [1] * (n // 2),
+        "category": np.random.choice(["B", "C", "D"], n // 2),
+        "continuous_var": np.random.normal(0, 1, n // 2),
+        "outcome": np.random.normal(12, 2, n // 2),
+    })
 
     # Combine the data
     data = pd.concat([group_0_data, group_1_data], ignore_index=True)
@@ -168,22 +173,18 @@ def test_common_support_with_gu_adjustment():
     n = 100
 
     # Group 0 has categories A, B, C
-    group_0_data = pd.DataFrame(
-        {
-            "group": [0] * (n // 2),
-            "category": np.random.choice(["A", "B", "C"], n // 2),
-            "outcome": np.random.normal(10, 2, n // 2),
-        }
-    )
+    group_0_data = pd.DataFrame({
+        "group": [0] * (n // 2),
+        "category": np.random.choice(["A", "B", "C"], n // 2),
+        "outcome": np.random.normal(10, 2, n // 2),
+    })
 
     # Group 1 has categories B, C, D (missing A, has extra D)
-    group_1_data = pd.DataFrame(
-        {
-            "group": [1] * (n // 2),
-            "category": np.random.choice(["B", "C", "D"], n // 2),
-            "outcome": np.random.normal(12, 2, n // 2),
-        }
-    )
+    group_1_data = pd.DataFrame({
+        "group": [1] * (n // 2),
+        "category": np.random.choice(["B", "C", "D"], n // 2),
+        "outcome": np.random.normal(12, 2, n // 2),
+    })
 
     data = pd.concat([group_0_data, group_1_data], ignore_index=True)
 
@@ -211,13 +212,11 @@ def test_common_support_with_gu_adjustment():
 def test_gu_adjustment():
     """Test the _apply_gu_adjustment method."""
     model = Oaxaca()
-    data = pd.DataFrame(
-        {
-            "group": [0, 0, 0, 1, 1, 1],
-            "category": ["A", "B", "C", "A", "B", "C"],
-            "outcome": [1, 2, 3, 4, 5, 6],
-        }
-    )
+    data = pd.DataFrame({
+        "group": [0, 0, 0, 1, 1, 1],
+        "category": ["A", "B", "C", "A", "B", "C"],
+        "outcome": [1, 2, 3, 4, 5, 6],
+    })
     model.fit("outcome ~ C(category)", data, group_variable="group")
     original_coef = model.coef_[0].copy()
 
@@ -236,13 +235,11 @@ def test_gu_adjustment():
 
 def test_term_dummies_gu_adjusted():
     """Test the categorical_to_dummy_mapping_gu_adjusted method."""
-    data = pd.DataFrame(
-        {
-            "group": [0, 0, 0, 1, 1, 1],
-            "category": ["A", "B", "C", "A", "B", "C"],
-            "outcome": [1, 2, 3, 4, 5, 6],
-        }
-    )
+    data = pd.DataFrame({
+        "group": [0, 0, 0, 1, 1, 1],
+        "category": ["A", "B", "C", "A", "B", "C"],
+        "outcome": [1, 2, 3, 4, 5, 6],
+    })
 
     _, X = Formula("outcome ~ C(category)").get_model_matrix(data)
 
@@ -256,7 +253,7 @@ def test_term_dummies_gu_adjusted():
             assert len(mapping_gu[term]) > len(regular_mapping[term])
 
     # Variable names should be reformatted (no [T.])
-    for term, dummies in mapping_gu.items():
+    for _, dummies in mapping_gu.items():
         for dummy in dummies:
             assert "[T." not in dummy
 
@@ -301,21 +298,17 @@ def test_weighted_gu_adjustment_intercept_equals_mean_outcome():
     categories_2 = ["X", "Y"]
 
     # Generate data for both groups
-    group_0_data = pd.DataFrame(
-        {
-            "group": [0] * (n // 2),
-            "cat1": np.random.choice(categories_1, n // 2),
-            "cat2": np.random.choice(categories_2, n // 2),
-        }
-    )
+    group_0_data = pd.DataFrame({
+        "group": [0] * (n // 2),
+        "cat1": np.random.choice(categories_1, n // 2),
+        "cat2": np.random.choice(categories_2, n // 2),
+    })
 
-    group_1_data = pd.DataFrame(
-        {
-            "group": [1] * (n // 2),
-            "cat1": np.random.choice(categories_1, n // 2),
-            "cat2": np.random.choice(categories_2, n // 2),
-        }
-    )
+    group_1_data = pd.DataFrame({
+        "group": [1] * (n // 2),
+        "cat1": np.random.choice(categories_1, n // 2),
+        "cat2": np.random.choice(categories_2, n // 2),
+    })
     data = pd.concat([group_0_data, group_1_data], ignore_index=True)
 
     group_0_outcomes = np.random.normal(10, 2, n // 2)

@@ -1,5 +1,4 @@
 from formulaic.utils.sentinels import Sentinel
-from typing import Dict, List
 
 
 def get_base_category(contrast_state):
@@ -22,7 +21,7 @@ def get_base_category(contrast_state):
     return base_category
 
 
-def term_dummies(model_spec) -> Dict:
+def term_dummies(model_spec) -> dict:
     """
     Create mapping from categorical terms to their dummy column names.
 
@@ -46,7 +45,7 @@ def term_dummies(model_spec) -> Dict:
     return results
 
 
-def dummies(model_spec) -> List:
+def dummies(model_spec) -> list:
     """
     Create a list of dummy column names from the model specification.
     """
@@ -56,7 +55,7 @@ def dummies(model_spec) -> List:
     return result
 
 
-def term_dummies_gu_adjusted(model_spec) -> Dict:
+def term_dummies_gu_adjusted(model_spec) -> dict:
     """
     Generate categorical to dummy mapping for GU-adjusted coefficients.
     This includes base categories and uses reformatted variable names.
