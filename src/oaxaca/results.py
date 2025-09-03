@@ -414,7 +414,7 @@ class OaxacaResults:
             })
 
         # Create MultiIndex DataFrame
-        index = pd.MultiIndex.from_tuples(index_tuples, names=["Variable_Group", "Category"])
+        index = pd.MultiIndex.from_tuples(index_tuples, names=("Variable_Group", "Category"))
         df = pd.DataFrame(data_rows, index=index)
 
         return df

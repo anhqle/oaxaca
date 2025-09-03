@@ -48,7 +48,7 @@ def test_two_fold_invalid_weights(sample_data):
 
     # Test with non-dictionary weights
     with pytest.raises(TypeError, match="Weights must be a dictionary"):
-        model.two_fold(weights=[0.5, 0.5])
+        model.two_fold(weights=[0.5, 0.5])  # type: ignore[arg-type]
 
 
 def test_twofold(sample_data):

@@ -140,7 +140,7 @@ class Oaxaca:
 
     def two_fold(
         self,
-        weights: Optional[dict[Any, float]] = None,
+        weights: dict[Any, float],
         gu_adjustment: Literal["none", "unweighted", "weighted"] = "none",
         direction: Literal["group0 - group1", "group1 - group0"] = "group0 - group1",
     ) -> "OaxacaResults":
@@ -334,7 +334,7 @@ class Oaxaca:
         for term, term_slice in self.X_model_spec.term_slices.items():
             if term not in term_dummies(self.X_model_spec):
                 # Not a categorical term, so just append the original coef
-                new_coef = pd.concat([new_coef, coef[term_slice]])
+                new_coef = pd.concat([new_coef, coef[term_slice]], axis=0)
             else:
                 # It's a categorical term, so let's apply GU adjustment
                 if len(term.factors) > 1:
@@ -347,7 +347,7 @@ class Oaxaca:
                 ).format(name=repr(factor), field=base_category)
 
                 # Create extended coefficient series including base category (coefficient = 0)
-                extended_coefs = pd.concat([coef[term_slice], pd.Series({base_category_column_name: 0.0})])
+                extended_coefs = pd.concat([coef[term_slice], pd.Series({base_category_column_name: 0.0})], axis=0)
                 # The non-full-rank X model-matrix will be named slightly different, e.g.
                 # edu[high_school] instead of edu[T.high_school]
                 # so we reformat the coefficient here to match
@@ -363,10 +363,12 @@ class Oaxaca:
 
                 # Adjust the coefficients, including the intercept
                 extended_coefs -= mean_coef
-                new_coef = pd.concat([new_coef, extended_coefs])
-                new_coef["Intercept"] += mean_coef
+                new_coef = pd.concat([new_coef, extended_coefs], axis=0)
+                if "Intercept" in new_coef.index:
+                    new_coef["Intercept"] += mean_coef
 
-        return new_coef
+        # Ensure return type is Series (pd.concat can infer Series | DataFrame)
+        return pd.Series(new_coef)
 
     def _ensure_conformable_dimensions(self, *series: pd.Series) -> tuple[pd.Series, ...]:
         """
