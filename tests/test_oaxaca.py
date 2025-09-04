@@ -337,3 +337,109 @@ def test_weighted_gu_adjustment_intercept_equals_mean_outcome():
 
     # Verify that the decomposition still holds
     assert np.isclose(results.total_difference, results.explained + results.unexplained, rtol=1e-10)
+
+
+def test_detailed_contributions_method():
+    """Test detailed_contributions returns correct structure and values with mock data."""
+    from oaxaca.results import OaxacaResults
+
+    # Create mock Oaxaca instance
+    mock_oaxaca = type("MockOaxaca", (), {"groups_": [0, 1], "group_variable": "group"})()
+
+    # Create simple mock data for decomposition
+    explained_detailed = pd.Series({"Intercept": 1.0, "x": 2.0, "C(cat)[B]": 0.5, "C(cat)[C]": -0.3})
+
+    unexplained_detailed = pd.Series({"Intercept": -0.5, "x": 1.5, "C(cat)[B]": 0.2, "C(cat)[C]": 0.1})
+
+    # Mock categorical mapping
+    categorical_mapping = {"C(cat)": ["C(cat)[B]", "C(cat)[C]"]}
+
+    # Create OaxacaResults with mock data
+    results = OaxacaResults(
+        oaxaca_instance=mock_oaxaca,
+        total_difference=4.5,
+        explained=3.2,
+        unexplained=1.3,
+        explained_detailed=explained_detailed,
+        unexplained_detailed=unexplained_detailed,
+        X_diff=pd.Series({"Intercept": 1, "x": 2, "C(cat)[B]": 0.5, "C(cat)[C]": -0.3}),
+        coef_nondiscriminatory=pd.Series({"Intercept": 1, "x": 1, "C(cat)[B]": 1, "C(cat)[C]": 1}),
+        weights={0: 0.5, 1: 0.5},
+        mean_X_0=pd.Series({"Intercept": 1, "x": 2, "C(cat)[B]": 0.5, "C(cat)[C]": 0}),
+        mean_X_1=pd.Series({"Intercept": 1, "x": 0, "C(cat)[B]": 0, "C(cat)[C]": 0.3}),
+        categorical_mapping=categorical_mapping,
+        direction="group0 - group1",
+    )
+
+    # Get actual result
+    detailed = results.detailed_contributions
+
+    # Create expected DataFrame
+    index = pd.MultiIndex.from_tuples(
+        [("Intercept", "Intercept"), ("x", "x"), ("C(cat)", "C(cat)[B]"), ("C(cat)", "C(cat)[C]")],
+        names=["Variable_Group", "Category"],
+    )
+
+    expected = pd.DataFrame(
+        {
+            "Mix-shift": [1.0, 2.0, 0.5, -0.3],
+            "Within-slice": [-0.5, 1.5, 0.2, 0.1],
+            "Total": [0.5, 3.5, 0.7, -0.2],
+            "Mix-shift %": [22.222222, 44.444444, 11.111111, -6.666667],
+            "Within-slice %": [-11.111111, 33.333333, 4.444444, 2.222222],
+            "Total %": [11.111111, 77.777778, 15.555556, -4.444444],
+            "Variable_Type": ["continuous", "continuous", "categorical", "categorical"],
+        },
+        index=index,
+    )
+
+    # Compare DataFrames
+    pd.testing.assert_frame_equal(detailed, expected, check_dtype=False, atol=1e-5)
+
+
+def test_contributions_method():
+    """Test contributions method aggregates detailed_contributions correctly with mock data."""
+    from oaxaca.results import OaxacaResults
+
+    # Create mock Oaxaca instance
+    mock_oaxaca = type("MockOaxaca", (), {"groups_": [0, 1], "group_variable": "group"})()
+
+    # Create mock data where categorical variable has multiple categories
+    explained_detailed = pd.Series({"Intercept": 1.0, "x": 2.0, "C(cat)[B]": 0.5, "C(cat)[C]": -0.3})
+
+    unexplained_detailed = pd.Series({"Intercept": -0.5, "x": 1.5, "C(cat)[B]": 0.2, "C(cat)[C]": 0.1})
+
+    categorical_mapping = {"C(cat)": ["C(cat)[B]", "C(cat)[C]"]}
+
+    results = OaxacaResults(
+        oaxaca_instance=mock_oaxaca,
+        total_difference=4.5,
+        explained=3.2,
+        unexplained=1.3,
+        explained_detailed=explained_detailed,
+        unexplained_detailed=unexplained_detailed,
+        X_diff=pd.Series({"Intercept": 1, "x": 2, "C(cat)[B]": 0.5, "C(cat)[C]": -0.3}),
+        coef_nondiscriminatory=pd.Series({"Intercept": 1, "x": 1, "C(cat)[B]": 1, "C(cat)[C]": 1}),
+        weights={0: 0.5, 1: 0.5},
+        mean_X_0=pd.Series({"Intercept": 1, "x": 2, "C(cat)[B]": 0.5, "C(cat)[C]": 0}),
+        mean_X_1=pd.Series({"Intercept": 1, "x": 0, "C(cat)[B]": 0, "C(cat)[C]": 0.3}),
+        categorical_mapping=categorical_mapping,
+        direction="group0 - group1",
+    )
+
+    # Get actual result
+    contrib = results.contributions
+
+    # Create expected DataFrame
+    expected = pd.DataFrame({
+        "Variable": ["Intercept", "x", "C(cat)"],
+        "Mix-shift": [1.0, 2.0, 0.2],  # 0.5 + (-0.3) for categorical
+        "Within-slice": [-0.5, 1.5, 0.3],  # 0.2 + 0.1 for categorical
+        "Total": [0.5, 3.5, 0.5],
+        "Mix-shift %": [22.222222, 44.444444, 4.444444],
+        "Within-slice %": [-11.111111, 33.333333, 6.666667],
+        "Total %": [11.111111, 77.777778, 11.111111],
+    })
+
+    # Compare DataFrames
+    pd.testing.assert_frame_equal(contrib, expected, check_dtype=False, atol=1e-5)

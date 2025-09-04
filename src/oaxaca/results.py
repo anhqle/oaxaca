@@ -290,7 +290,8 @@ class OaxacaResults:
         detailed_df = self.detailed_contributions
 
         # Group by the first level of MultiIndex (Variable_Group) and sum
-        aggregated = detailed_df.groupby(level="Variable_Group").agg({
+        # Use sort=False to preserve the original order from explained_detailed.index
+        aggregated = detailed_df.groupby(level="Variable_Group", sort=False).agg({
             "Mix-shift": "sum",
             "Within-slice": "sum",
             "Total": "sum",
