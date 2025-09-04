@@ -725,7 +725,9 @@ class ThreeFoldResults(OaxacaResults):
         self.coefficient_detailed = coefficient_detailed
         self.interaction_detailed = interaction_detailed
 
-    @cached_property
+    def contributions(self) -> pd.DataFrame:
+        return super().contributions()
+
     def detailed_contributions(self) -> pd.DataFrame:
         """
         Create a table showing detailed contributions with proper hierarchical structure.

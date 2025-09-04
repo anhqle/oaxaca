@@ -79,6 +79,84 @@ def test_twofold(sample_data):
     assert np.isclose(results.unexplained_detailed["female"], -1.16526457)
 
 
+def test_threefold(sample_data):
+    """Test that three-fold decomposition results match expected values."""
+    model = Oaxaca()
+    formula = "exp(ln_real_wage) ~ age + female + C(education_level, contr.treatment('high_school'))"
+    model.fit(formula, sample_data, group_variable="foreign_born")
+
+    # Run decomposition
+    results = model.three_fold()
+
+    # Verify the three-fold decomposition identity: total = endowment + coefficient + interaction
+    assert np.isclose(results.total_difference, results.endowment + results.coefficient + results.interaction)
+
+    # Test that detailed components sum to their totals
+    assert np.isclose(results.endowment_detailed.sum(), results.endowment, rtol=1e-10)
+    assert np.isclose(results.coefficient_detailed.sum(), results.coefficient, rtol=1e-10)
+    assert np.isclose(results.interaction_detailed.sum(), results.interaction, rtol=1e-10)
+
+    assert np.isclose(results.total_difference, 3.015574)
+    assert np.isclose(results.endowment, 1.6165339)
+    assert np.isclose(results.coefficient, 2.8333261)
+    assert np.isclose(results.interaction, -1.4342857)
+
+    assert np.isclose(results.endowment_detailed["age"], -0.51677529)
+    assert np.isclose(results.coefficient_detailed["age"], 7.55853070)
+    assert np.isclose(results.interaction_detailed["age"], -1.23237194)
+
+    assert np.isclose(results.endowment_detailed["female"], -0.27265166)
+    assert np.isclose(results.coefficient_detailed["female"], -1.16526457)
+    assert np.isclose(results.interaction_detailed["female"], -0.25043038)
+
+
+def test_threefold_gu_adjustment(sample_data):
+    """Test three-fold decomposition with GU adjustment produces expected results."""
+    model = Oaxaca()
+    formula = "exp(ln_real_wage) ~ age + female + C(education_level, contr.treatment('high_school'))"
+    model.fit(formula, sample_data, group_variable="foreign_born")
+
+    # Run decomposition with GU adjustment
+    results = model.three_fold(gu_adjustment="unweighted")
+
+    # Verify the three-fold decomposition identity still holds
+    total_check = results.endowment + results.coefficient + results.interaction
+    assert np.isclose(results.total_difference, total_check)
+
+    # Test that detailed components sum to their totals with GU adjustment
+    assert np.isclose(results.endowment_detailed.sum(), results.endowment, rtol=1e-10)
+    assert np.isclose(results.coefficient_detailed.sum(), results.coefficient, rtol=1e-10)
+    assert np.isclose(results.interaction_detailed.sum(), results.interaction, rtol=1e-10)
+
+    # Check detailed endowment components for specific coefficients
+    assert np.isclose(results.endowment_detailed["age"], -0.51677529)
+    assert np.isclose(results.endowment_detailed["female"], -0.27265166)
+    lths_label = "C(education_level, contr.treatment('high_school'))[LTHS]"
+    college_label = "C(education_level, contr.treatment('high_school'))[college]"
+    assert np.isclose(results.endowment_detailed[lths_label], 2.17644672)
+    assert np.isclose(results.endowment_detailed[college_label], -0.07907587)
+
+    # Check detailed coefficient components for specific coefficients
+    assert np.isclose(results.coefficient_detailed["age"], 7.55853070)
+    assert np.isclose(results.coefficient_detailed["female"], -1.16526457)
+    assert np.isclose(results.coefficient_detailed[lths_label], 0.06459830)
+    assert np.isclose(results.coefficient_detailed[college_label], 0.58246411)
+
+    # Check detailed interaction components for specific coefficients
+    assert np.isclose(results.interaction_detailed["age"], -1.23237194)
+    assert np.isclose(results.interaction_detailed["female"], -0.25043038)
+    assert np.isclose(results.interaction_detailed[lths_label], -0.04486771)
+    assert np.isclose(results.interaction_detailed[college_label], 0.33558627)
+
+    # Check intercept, which should be adjusted by GU adjustment
+    assert np.isclose(results.endowment_detailed["Intercept"], 0.0)
+    assert np.isclose(results.coefficient_detailed["Intercept"], -4.26374940)
+    assert np.isclose(results.interaction_detailed["Intercept"], 0.0)
+
+    # Verify GU adjustment was applied by checking variable names include base categories
+    assert "C(education_level, contr.treatment('high_school'))[high_school]" in results.endowment_detailed.index
+
+
 def test_twofold_gu_adjustment(sample_data):
     """Test two-fold decomposition with GU adjustment produces expected results."""
     model = Oaxaca()
