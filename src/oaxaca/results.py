@@ -148,44 +148,26 @@ def _extract_common_variable_name(dummy_vars):
 
 
 class OaxacaResults:
-    """Results class for Oaxaca-Blinder decomposition."""
-
     def __init__(
         self,
         oaxaca_instance: "Oaxaca",
         total_difference: float,
-        explained: float,
-        unexplained: float,
-        explained_detailed: pd.Series,
-        unexplained_detailed: pd.Series,
-        X_diff: pd.Series,
-        coef_nondiscriminatory: pd.Series,
-        weights: dict[Any, float],
         mean_X_0: pd.Series,
         mean_X_1: pd.Series,
-        categorical_mapping: dict,
+        categorical_to_dummy: dict,
         direction: str,
     ):
-        # Store reference to the original Oaxaca instance for context
         self._oaxaca = oaxaca_instance
-
-        # Final computed results
         self.total_difference = total_difference
-        self.explained = explained
-        self.unexplained = unexplained
-        self.explained_detailed = explained_detailed
-        self.unexplained_detailed = unexplained_detailed
-        self.X_diff = X_diff
-        self.coef_nondiscriminatory = coef_nondiscriminatory
-        self.weights = weights
-        self.direction = direction
-
-        # Store the actual mean_X values used in decomposition
         self.mean_X_0 = mean_X_0
         self.mean_X_1 = mean_X_1
-
-        # Store the categorical to dummy variable mapping
-        self.categorical_mapping = categorical_mapping
+        self.X_diff = mean_X_0 - mean_X_1 if direction == "group0 - group1" else mean_X_1 - mean_X_0
+        self.direction = direction
+        self.categorical_to_dummy = categorical_to_dummy
+        self.dummy_to_categorical = {}
+        for categorical_term, dummy_vars in self.categorical_to_dummy.items():
+            for dummy_var in dummy_vars:
+                self.dummy_to_categorical[dummy_var] = categorical_term
 
     @cached_property
     def removal_info(self) -> dict:
@@ -259,9 +241,7 @@ class OaxacaResults:
         adj_1 = by_group.get(groups[1], {}).get("mean_adjustment", 0.0)
         removal_contribution = adj_0 - adj_1 if self.direction == "group0 - group1" else adj_1 - adj_0
 
-        removal_contribution_pct = (
-            (removal_contribution / abs(self.total_difference) * 100) if abs(self.total_difference) > 1e-10 else 0
-        )
+        removal_contribution_pct = removal_contribution / abs(self.total_difference) * 100
 
         has_removals = (
             any(len(g.get("removed_dummies", [])) > 0 for g in by_group.values()) and abs(removal_contribution) > 1e-10
@@ -273,6 +253,78 @@ class OaxacaResults:
             "removal_contribution_pct": float(removal_contribution_pct),
             "has_removals": bool(has_removals),
         }
+
+    @cached_property
+    def detailed_contributions(self, **kwargs) -> pd.DataFrame:
+        """
+        kwargs are the decomposition terms
+        """
+        index_tuples = []
+        result_rows = []
+
+        decomposition_components = kwargs  # k = ["explained_detailed", "unexplained_detailed"]
+        decomposition_components["total"] = sum(decomposition_components.values())
+
+        for var_name in self.mean_X_0.index:
+            result_row = {}
+            for component in decomposition_components:
+                result_row[component] = decomposition_components[component][var_name]
+                result_row[f"{component}_pct"] = (
+                    decomposition_components[component][var_name] / abs(self.total_difference) * 100
+                )
+
+            if var_name in self.dummy_to_categorical:
+                # Categorical dummy variable
+                categorical_term = self.dummy_to_categorical[var_name]
+                common_var_name = _extract_common_variable_name(self.categorical_to_dummy[categorical_term])
+                index_tuples.append((common_var_name, var_name))
+                result_row["variable_type"] = "categorical"
+            else:
+                # Continuous variable
+                index_tuples.append((var_name, var_name))
+                result_row["variable_type"] = "continuous"
+
+            result_rows.append(result_row)
+
+        # Create MultiIndex DataFrame
+        index = pd.MultiIndex.from_tuples(index_tuples, names=("Variable_Group", "Category"))
+        df = pd.DataFrame(result_rows, index=index)
+
+        return df
+
+    def __repr__(self):
+        return f"OaxacaResults(groups={self._oaxaca.groups_}, group_variable='{self._oaxaca.group_variable}')"
+
+    def _repr_html_(self) -> str:
+        """Rich HTML display for Jupyter notebooks with detailed information."""
+        return self.to_html(display_len=None, sort=True)
+
+
+class TwoFoldResults(OaxacaResults):
+    """Results class for Oaxaca-Blinder decomposition."""
+
+    def __init__(
+        self,
+        oaxaca_instance: "Oaxaca",
+        total_difference: float,
+        explained: float,
+        unexplained: float,
+        explained_detailed: pd.Series,
+        unexplained_detailed: pd.Series,
+        coef_nondiscriminatory: pd.Series,
+        weights: dict[Any, float],
+        mean_X_0: pd.Series,
+        mean_X_1: pd.Series,
+        categorical_to_dummy: dict,
+        direction: str,
+    ):
+        super().__init__(oaxaca_instance, total_difference, mean_X_0, mean_X_1, categorical_to_dummy, direction)
+        self.explained = explained
+        self.unexplained = unexplained
+        self.explained_detailed = explained_detailed
+        self.unexplained_detailed = unexplained_detailed
+        self.coef_nondiscriminatory = coef_nondiscriminatory
+        self.weights = weights
 
     @cached_property
     def contributions(self) -> pd.DataFrame:
@@ -317,69 +369,10 @@ class OaxacaResults:
             A table with MultiIndex (Variable_Group, Category) showing individual
             category contributions with their parent categorical variable.
         """
-        if not hasattr(self, "total_difference"):
-            raise ValueError("Must call two_fold() before generating detailed contributions table")
-
-        # Get categorical variable grouping
-        categorical_groups = self.categorical_mapping
-
-        # Create a mapping from dummy variable names to their categorical parent
-        dummy_to_categorical = {}
-        for categorical_term, dummy_vars in categorical_groups.items():
-            for dummy_var in dummy_vars:
-                dummy_to_categorical[dummy_var] = categorical_term
-
-        # Build hierarchical data
-        index_tuples = []
-        data_rows = []
-
-        for var_name in self.explained_detailed.index:
-            explained_val = self.explained_detailed[var_name]
-            unexplained_val = self.unexplained_detailed[var_name]
-            total_val = explained_val + unexplained_val
-
-            # Calculate percentages
-            explained_pct = (
-                (explained_val / abs(self.total_difference) * 100) if abs(self.total_difference) > 1e-10 else 0
-            )
-            unexplained_pct = (
-                (unexplained_val / abs(self.total_difference) * 100) if abs(self.total_difference) > 1e-10 else 0
-            )
-            total_pct = (total_val / abs(self.total_difference) * 100) if abs(self.total_difference) > 1e-10 else 0
-
-            if var_name in dummy_to_categorical:
-                # Categorical dummy variable
-                categorical_term = dummy_to_categorical[var_name]
-                common_var_name = _extract_common_variable_name(categorical_groups[categorical_term])
-                index_tuples.append((common_var_name, var_name))
-                variable_type = "categorical"
-            else:
-                # Continuous variable
-                index_tuples.append((var_name, var_name))
-                variable_type = "continuous"
-
-            data_rows.append({
-                "Mix-shift": explained_val,
-                "Within-slice": unexplained_val,
-                "Total": total_val,
-                "Mix-shift %": explained_pct,
-                "Within-slice %": unexplained_pct,
-                "Total %": total_pct,
-                "Variable_Type": variable_type,
-            })
-
-        # Create MultiIndex DataFrame
-        index = pd.MultiIndex.from_tuples(index_tuples, names=("Variable_Group", "Category"))
-        df = pd.DataFrame(data_rows, index=index)
-
-        return df
-
-    def __repr__(self):
-        return f"OaxacaResults(groups={self._oaxaca.groups_}, group_variable='{self._oaxaca.group_variable}')"
-
-    def _repr_html_(self) -> str:
-        """Rich HTML display for Jupyter notebooks with detailed information."""
-        return self.to_html(display_len=None, sort=True)
+        return super().detailed_contributions(
+            explained_detailed=self.explained_detailed,
+            unexplained_detailed=self.unexplained_detailed,
+        )
 
     def _create_detailed_contributions_table(self, display_len: Optional[int] = None, sort: bool = True) -> str:
         """Create detailed contributions table in HTML format.
@@ -466,13 +459,9 @@ class OaxacaResults:
         total_row_explained = self.explained
         total_row_unexplained = self.unexplained
         total_row_total = self.total_difference
-        total_explained_pct = (
-            (total_row_explained / abs(self.total_difference) * 100) if abs(self.total_difference) > 1e-10 else 0
-        )
-        total_unexplained_pct = (
-            (total_row_unexplained / abs(self.total_difference) * 100) if abs(self.total_difference) > 1e-10 else 0
-        )
-        total_pct = 100.0 if abs(self.total_difference) > 1e-10 else 0
+        total_explained_pct = total_row_explained / abs(self.total_difference) * 100
+        total_unexplained_pct = total_row_unexplained / abs(self.total_difference) * 100
+        total_pct = 100.0
 
         lines.append('<tr style="font-weight: bold; background-color: #e9ecef; border-top: 2px solid #333;">')
         lines.append(_format_cell("Total", "name"))
@@ -712,3 +701,48 @@ class OaxacaResults:
                 print(f"{display_var_name:<40} {group_0_mean:>15.4f} {group_1_mean:>15.4f} {difference:>15.4f}")
             elif self.direction == "group1 - group0":
                 print(f"{display_var_name:<40} {group_1_mean:>15.4f} {group_0_mean:>15.4f} {difference:>15.4f}")
+
+
+class ThreeFoldResults(OaxacaResults):
+    def __init__(
+        self,
+        oaxaca_instance: "Oaxaca",
+        total_difference: float,
+        endowment: float,
+        coefficient: float,
+        interaction: float,
+        endowment_detailed: pd.Series,
+        coefficient_detailed: pd.Series,
+        interaction_detailed: pd.Series,
+        mean_X_0: pd.Series,
+        mean_X_1: pd.Series,
+        categorical_to_dummy: dict,
+        direction: str,
+    ):
+        super().__init__(oaxaca_instance, total_difference, mean_X_0, mean_X_1, categorical_to_dummy, direction)
+        self.endowment = endowment
+        self.coefficient = coefficient
+        self.interaction = interaction
+        self.endowment_detailed = endowment_detailed
+        self.coefficient_detailed = coefficient_detailed
+        self.interaction_detailed = interaction_detailed
+
+    @cached_property
+    def detailed_contributions(self) -> pd.DataFrame:
+        """
+        Create a table showing detailed contributions with proper hierarchical structure.
+
+        Returns
+        -------
+        pd.DataFrame
+            A table with MultiIndex (Variable_Group, Category) showing individual
+            category contributions with their parent categorical variable.
+        """
+        df = pd.DataFrame({
+            "Variable": self.endowment_detailed.index.tolist(),
+            "Endowment": self.endowment_detailed,
+            "Coefficient": self.coefficient_detailed,
+            "Interaction": self.interaction_detailed,
+        })
+
+        return df
