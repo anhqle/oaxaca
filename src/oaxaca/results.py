@@ -147,52 +147,6 @@ def _extract_common_variable_name(dummy_vars):
     return common_name.strip()
 
 
-def _format_variable_name_with_breaks(var_name: str, max_length: int = 15) -> str:
-    """
-    Format variable names with line breaks for better display in charts.
-
-    Parameters
-    ----------
-    var_name : str
-        The variable name to format
-    max_length : int, default 15
-        Maximum length before inserting a line break
-
-    Returns
-    -------
-    str
-        Formatted variable name with <br> tags for line breaks
-    """
-    if len(var_name) <= max_length:
-        return var_name
-
-    # Split on underscores first, then by length if needed
-    parts = var_name.split("_")
-    if len(parts) > 1:
-        # Try to group parts to stay under max_length
-        formatted_parts = []
-        current_part = ""
-
-        for part in parts:
-            if len(current_part + "_" + part) <= max_length:
-                current_part = current_part + "_" + part if current_part else part
-            else:
-                if current_part:
-                    formatted_parts.append(current_part)
-                current_part = part
-
-        if current_part:
-            formatted_parts.append(current_part)
-
-        return "<br>".join(formatted_parts)
-    else:
-        # Split long single words
-        if len(var_name) > max_length:
-            mid_point = len(var_name) // 2
-            return var_name[:mid_point] + "<br>" + var_name[mid_point:]
-        return var_name
-
-
 class OaxacaResults:
     """Results class for Oaxaca-Blinder decomposition."""
 
