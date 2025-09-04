@@ -384,12 +384,12 @@ class TwoFoldResults(OaxacaResults):
             Whether to sort variables by their absolute total contributions.
         """
         # Get both dataframes from class properties
-        detailed_df = self.detailed_contributions
-        categorical_df = self.contributions
+        detailed_df = self.detailed_contributions()
+        categorical_df = self.contributions()
 
         # Apply sorting if requested
         if sort and len(categorical_df) > 0:
-            categorical_df = categorical_df.reindex(categorical_df["Total"].abs().sort_values(ascending=False).index)
+            categorical_df = categorical_df.reindex(categorical_df["total"].abs().sort_values(ascending=False).index)
 
         lines = []
         # Table header
@@ -406,13 +406,13 @@ class TwoFoldResults(OaxacaResults):
 
         # Process each categorical variable and its details directly
         for _, cat_row in categorical_df.iterrows():
-            var_name = cat_row["Variable"]
-            explained = cat_row["Mix-shift"]
-            explained_pct = cat_row["Mix-shift %"]
-            unexplained = cat_row["Within-slice"]
-            unexplained_pct = cat_row["Within-slice %"]
-            total = cat_row["Total"]
-            total_pct = cat_row["Total %"]
+            var_name = cat_row["variable"]
+            explained = cat_row["explained_detailed"]
+            explained_pct = cat_row["explained_detailed_pct"]
+            unexplained = cat_row["unexplained_detailed"]
+            unexplained_pct = cat_row["unexplained_detailed_pct"]
+            total = cat_row["total"]
+            total_pct = cat_row["total_pct"]
 
             # Apply truncation if specified
             display_var_name = _truncate_variable_name(var_name, display_len)
@@ -432,12 +432,12 @@ class TwoFoldResults(OaxacaResults):
             var_metadata = detailed_df.loc[detailed_df.index.get_level_values("variable_group") == var_name]
             if len(var_metadata) > 1:  # More than one category means it's categorical
                 for category_name, detail_row in var_metadata.iterrows():
-                    category_explained = detail_row["Mix-shift"]
-                    category_explained_pct = detail_row["Mix-shift %"]
-                    category_unexplained = detail_row["Within-slice"]
-                    category_unexplained_pct = detail_row["Within-slice %"]
-                    category_total = detail_row["Total"]
-                    category_total_pct = detail_row["Total %"]
+                    category_explained = detail_row["explained_detailed"]
+                    category_explained_pct = detail_row["explained_detailed_pct"]
+                    category_unexplained = detail_row["unexplained_detailed"]
+                    category_unexplained_pct = detail_row["unexplained_detailed_pct"]
+                    category_total = detail_row["total"]
+                    category_total_pct = detail_row["total_pct"]
 
                     # category_name[1] is the actual category name (second part of MultiIndex)
                     display_category = _truncate_variable_name(category_name[1], display_len)
@@ -462,7 +462,7 @@ class TwoFoldResults(OaxacaResults):
         total_pct = 100.0
 
         lines.append('<tr style="font-weight: bold; background-color: #e9ecef; border-top: 2px solid #333;">')
-        lines.append(_format_cell("Total", "name"))
+        lines.append(_format_cell("total", "name"))
         lines.append(_format_cell(total_row_explained))
         lines.append(_format_cell(total_explained_pct, is_percentage=True))
         lines.append(_format_cell(total_row_unexplained))
