@@ -369,19 +369,3 @@ class Oaxaca:
 
         # Ensure return type is Series (pd.concat can infer Series | DataFrame)
         return pd.Series(new_coef)
-
-    def _ensure_conformable_dimensions(self, *series: pd.Series) -> tuple[pd.Series, ...]:
-        """
-        Ensure multiple pandas Series have conformable dimensions
-
-        This solves the "common support" problem where categorical variables may have different
-        sets of categories across the two groups.
-        Missing categories are inserted with value 0.
-
-        See a discussion of the common support issue in Lemieux p16 and
-        Nopo, Hugo (2008) ìMatching as a Tool to Decompose Wage Gaps," Review of Economics and Statistics 90: 290-299.
-        """
-        target_index = self.X_model_spec.column_names
-        aligned_series = tuple(s.reindex(target_index, fill_value=0.0) for s in series)
-
-        return aligned_series
