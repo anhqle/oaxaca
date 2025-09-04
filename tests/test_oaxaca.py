@@ -368,7 +368,7 @@ def test_detailed_contributions_method():
     # Create expected DataFrame
     index = pd.MultiIndex.from_tuples(
         [("Intercept", "Intercept"), ("x", "x"), ("C(cat)", "C(cat)[B]"), ("C(cat)", "C(cat)[C]")],
-        names=["variable_group", "category"],
+        names=("variable_group", "category"),
     )
 
     expected = pd.DataFrame(

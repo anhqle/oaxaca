@@ -265,7 +265,8 @@ class OaxacaResults:
         index_tuples = []
         result_rows = []
 
-        decomposition_components["total"] = sum(decomposition_components.values())
+        # Ignore type checking because type checker mistakenly thought sum() returns a float
+        decomposition_components["total"] = sum(decomposition_components.values())  # type: ignore[invalid-assignment]
 
         for var_name in self.mean_X_0.index:
             result_row = {}

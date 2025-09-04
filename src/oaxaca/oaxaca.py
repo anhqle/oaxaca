@@ -8,7 +8,7 @@ import statsmodels.api as sm
 from formulaic import Formula
 
 if TYPE_CHECKING:
-    from .results import OaxacaResults
+    from .results import ThreeFoldResults, TwoFoldResults
 
 from .formulaic_utils import (
     dummies,
@@ -191,7 +191,7 @@ class Oaxaca:
         weights: dict[Any, float],
         gu_adjustment: Literal["none", "unweighted", "weighted"] = "none",
         direction: Literal["group0 - group1", "group1 - group0"] = "group0 - group1",
-    ) -> "OaxacaResults":
+    ) -> "TwoFoldResults":
         """
         Perform two-fold decomposition with customizable weights.
 
@@ -261,7 +261,7 @@ class Oaxaca:
         self,
         gu_adjustment: Literal["none", "unweighted", "weighted"] = "none",
         direction: Literal["group0 - group1", "group1 - group0"] = "group0 - group1",
-    ) -> "OaxacaResults":
+    ) -> "ThreeFoldResults":
         """
         Perform three-fold decomposition.
 
@@ -325,9 +325,9 @@ class Oaxaca:
             categorical_to_dummy = term_dummies(self.X_model_spec)
 
         # Import here to avoid circular imports
-        from .results import OaxacaResults
+        from .results import ThreeFoldResults
 
-        return OaxacaResults(
+        return ThreeFoldResults(
             oaxaca_instance=self,
             total_difference=total_diff,
             endowment=endowment,
