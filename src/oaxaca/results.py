@@ -313,9 +313,133 @@ class OaxacaResults:
     def __repr__(self):
         return f"OaxacaResults(groups={self._oaxaca.groups_}, group_variable='{self._oaxaca.group_variable}')"
 
-    def _repr_html_(self) -> str:
-        """Rich HTML display for Jupyter notebooks with detailed information."""
-        return self.to_html(display_len=None, sort=True)
+    def _create_detailed_contributions_table(
+        self, column_names: list[str], display_len: Optional[int] = None, sort: bool = True
+    ) -> str:
+        """Create detailed contributions table in HTML format.
+
+        Parameters
+        ----------
+        column_names: list[str]
+            List of column names to include in the table.
+        display_len : int, optional
+            Maximum length for variable names in output tables. If provided,
+            variable names will be truncated to this length.
+        sort : bool, default True
+            Whether to sort variables by their absolute total contributions.
+        """
+        # Get both dataframes from class properties
+        detailed_df = self.detailed_contributions()
+        categorical_df = self.contributions()
+
+        # Apply sorting if requested
+        if sort and len(categorical_df) > 0:
+            categorical_df = categorical_df.reindex(categorical_df["total"].abs().sort_values(ascending=False).index)
+
+        lines = []
+        # Table header
+        lines.append('<table style="border-collapse: collapse; width: 100%; font-size: 0.9em;">')
+        lines.append("<thead>")
+        lines.append('<tr style="background-color: #f0f0f0;">')
+
+        for header in ["Variable", "Explained", "Expl %", "Unexplained", "Unexpl %", "Total", "Tot %"]:
+            lines.append(_format_cell(header, "header"))
+
+        lines.append("</tr>")
+        lines.append("</thead>")
+        lines.append("<tbody>")
+
+        # Process each categorical variable and its details directly
+        for _, cat_row in categorical_df.iterrows():
+            var_name = cat_row["variable"]
+            display_var_name = _truncate_variable_name(var_name, display_len)
+
+            # Add main variable row
+            lines.append('<tr style="font-weight: bold; background-color: #f8f9fa;">')
+            lines.append(_format_cell(display_var_name, "name"))
+            for column_name in column_names:
+                lines.append(_format_cell(cat_row[column_name], is_percentage=column_name.endswith("_pct")))
+            lines.append("</tr>")
+
+            # Individual categories only if it's truly categorical (multiple categories)
+            var_metadata = detailed_df.loc[detailed_df.index.get_level_values("variable_group") == var_name]
+            if len(var_metadata) > 1:  # More than one category means it's categorical
+                for category_name, detail_row in var_metadata.iterrows():
+                    # category_name[1] is the actual category name (second part of MultiIndex)
+                    display_category = _truncate_variable_name(category_name[1], display_len)
+
+                    # Add subcategory row
+                    lines.append("<tr>")
+                    lines.append(_format_cell(display_category, "name_sub"))
+                    for col_name in column_names:
+                        lines.append(_format_cell(detail_row[col_name], is_percentage=col_name.endswith("_pct")))
+                    lines.append("</tr>")
+
+        return "".join(lines)
+
+    def to_html(self, column_names: list[str], display_len: Optional[int] = None, sort: bool = True) -> str:
+        """Generate HTML representation with optional variable name truncation.
+
+        Parameters
+        ----------
+        display_len : int, optional
+            Maximum length for variable names in output tables. If provided,
+            variable names will be truncated to this length.
+        sort : bool, default True
+            Whether to sort variables by their absolute total contributions.
+
+        Returns
+        -------
+        str
+            HTML string representation of the decomposition results
+        """
+        if not hasattr(self, "total_difference"):
+            return "<p><strong>OaxacaResults</strong> (not yet computed - call two_fold() first)</p>"
+
+        if self.direction == "group0 - group1":
+            direction_text = f"{self._oaxaca.groups_[0]} - {self._oaxaca.groups_[1]}"
+        else:
+            direction_text = f"{self._oaxaca.groups_[1]} - {self._oaxaca.groups_[0]}"
+
+        detailed_table_html = self._create_detailed_contributions_table(column_names, display_len, sort)
+
+        removal_section = ""
+        if self.removal_info["has_removals"]:
+            removal_section = f"""
+            <div style="margin-top: 15px; padding: 10px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px;">
+                <strong>⚠️ Category Removal Impact:</strong> {self.removal_info["removal_contribution"]:.4f}
+                ({self.removal_info["removal_contribution_pct"]:.1f}% of total difference)
+            </div>
+            """
+
+            # Add detailed removal results if available
+            removal_details = create_removal_details_html(self.removal_info)
+            removal_section += removal_details
+
+        html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 1000px;">
+            <h3 style="color: #2c3e50; margin-bottom: 15px;">Oaxaca-Blinder Decomposition Results</h3>
+
+            <div style="margin-bottom: 15px;">
+                <p style="margin: 3px 0;"><strong>Group Variable:</strong> {self._oaxaca.group_variable} | <strong>Groups:</strong> {self._oaxaca.groups_[0]} vs {self._oaxaca.groups_[1]} | <strong>Direction:</strong> {direction_text}</p>
+            </div>
+
+            {removal_section}
+
+            <h4 style="color: #2c3e50; margin-top: 20px; margin-bottom: 10px;">Detailed Variable Contributions</h4>
+            {detailed_table_html}
+
+            <div style="margin-top: 15px; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+                <p style="margin: 0; font-size: 0.9em; color: #666;">
+                    <strong>💡 For programmatic access:</strong><br>
+                    • <code>contributions</code> - aggregated categorical variables<br>
+                    • <code>detailed_contributions</code> - individual categories with hierarchy<br>
+                    • <code>removal_info</code> - per-group removal impact details
+                </p>
+            </div>
+        </div>
+        """
+        return html
 
 
 class TwoFoldResults(OaxacaResults):
@@ -367,178 +491,28 @@ class TwoFoldResults(OaxacaResults):
             A table with MultiIndex (variable_group, Category) showing individual
             category contributions with their parent categorical variable.
         """
-        return super().detailed_contributions({
-            "explained_detailed": self.explained_detailed,
-            "unexplained_detailed": self.unexplained_detailed,
-        })
+        return OaxacaResults.detailed_contributions(
+            self,
+            {
+                "explained_detailed": self.explained_detailed,
+                "unexplained_detailed": self.unexplained_detailed,
+            },
+        )
 
-    def _create_detailed_contributions_table(self, display_len: Optional[int] = None, sort: bool = True) -> str:
-        """Create detailed contributions table in HTML format.
-
-        Parameters
-        ----------
-        display_len : int, optional
-            Maximum length for variable names in output tables. If provided,
-            variable names will be truncated to this length.
-        sort : bool, default True
-            Whether to sort variables by their absolute total contributions.
-        """
-        # Get both dataframes from class properties
-        detailed_df = self.detailed_contributions()
-        categorical_df = self.contributions()
-
-        # Apply sorting if requested
-        if sort and len(categorical_df) > 0:
-            categorical_df = categorical_df.reindex(categorical_df["total"].abs().sort_values(ascending=False).index)
-
-        lines = []
-        # Table header
-        lines.append('<table style="border-collapse: collapse; width: 100%; font-size: 0.9em;">')
-        lines.append("<thead>")
-        lines.append('<tr style="background-color: #f0f0f0;">')
-
-        for header in ["Variable", "Mix-shift", "Mix %", "Within-slice", "Within %", "Total", "Tot %"]:
-            lines.append(_format_cell(header, "header"))
-
-        lines.append("</tr>")
-        lines.append("</thead>")
-        lines.append("<tbody>")
-
-        # Process each categorical variable and its details directly
-        for _, cat_row in categorical_df.iterrows():
-            var_name = cat_row["variable"]
-            explained = cat_row["explained_detailed"]
-            explained_pct = cat_row["explained_detailed_pct"]
-            unexplained = cat_row["unexplained_detailed"]
-            unexplained_pct = cat_row["unexplained_detailed_pct"]
-            total = cat_row["total"]
-            total_pct = cat_row["total_pct"]
-
-            # Apply truncation if specified
-            display_var_name = _truncate_variable_name(var_name, display_len)
-
-            # Add main variable row
-            lines.append('<tr style="font-weight: bold; background-color: #f8f9fa;">')
-            lines.append(_format_cell(display_var_name, "name"))
-            lines.append(_format_cell(explained))
-            lines.append(_format_cell(explained_pct, is_percentage=True))
-            lines.append(_format_cell(unexplained))
-            lines.append(_format_cell(unexplained_pct, is_percentage=True))
-            lines.append(_format_cell(total))
-            lines.append(_format_cell(total_pct, is_percentage=True))
-            lines.append("</tr>")
-
-            # Individual categories only if it's truly categorical (multiple categories)
-            var_metadata = detailed_df.loc[detailed_df.index.get_level_values("variable_group") == var_name]
-            if len(var_metadata) > 1:  # More than one category means it's categorical
-                for category_name, detail_row in var_metadata.iterrows():
-                    category_explained = detail_row["explained_detailed"]
-                    category_explained_pct = detail_row["explained_detailed_pct"]
-                    category_unexplained = detail_row["unexplained_detailed"]
-                    category_unexplained_pct = detail_row["unexplained_detailed_pct"]
-                    category_total = detail_row["total"]
-                    category_total_pct = detail_row["total_pct"]
-
-                    # category_name[1] is the actual category name (second part of MultiIndex)
-                    display_category = _truncate_variable_name(category_name[1], display_len)
-
-                    # Add subcategory row
-                    lines.append("<tr>")
-                    lines.append(_format_cell(display_category, "name_sub"))
-                    lines.append(_format_cell(category_explained))
-                    lines.append(_format_cell(category_explained_pct, is_percentage=True))
-                    lines.append(_format_cell(category_unexplained))
-                    lines.append(_format_cell(category_unexplained_pct, is_percentage=True))
-                    lines.append(_format_cell(category_total))
-                    lines.append(_format_cell(category_total_pct, is_percentage=True))
-                    lines.append("</tr>")
-
-        # Calculate and add total row
-        total_row_explained = self.explained
-        total_row_unexplained = self.unexplained
-        total_row_total = self.total_difference
-        total_explained_pct = total_row_explained / abs(self.total_difference) * 100
-        total_unexplained_pct = total_row_unexplained / abs(self.total_difference) * 100
-        total_pct = 100.0
-
-        lines.append('<tr style="font-weight: bold; background-color: #e9ecef; border-top: 2px solid #333;">')
-        lines.append(_format_cell("total", "name"))
-        lines.append(_format_cell(total_row_explained))
-        lines.append(_format_cell(total_explained_pct, is_percentage=True))
-        lines.append(_format_cell(total_row_unexplained))
-        lines.append(_format_cell(total_unexplained_pct, is_percentage=True))
-        lines.append(_format_cell(total_row_total))
-        lines.append(_format_cell(total_pct, is_percentage=True))
-        lines.append("</tr>")
-        lines.append("</tbody>")
-        lines.append("</table>")
-
-        return "".join(lines)
+    def _repr_html_(self) -> str:
+        """Rich HTML display for Jupyter notebooks with detailed information."""
+        return self.to_html(display_len=None, sort=True)
 
     def to_html(self, display_len: Optional[int] = None, sort: bool = True) -> str:
-        """Generate HTML representation with optional variable name truncation.
-
-        Parameters
-        ----------
-        display_len : int, optional
-            Maximum length for variable names in output tables. If provided,
-            variable names will be truncated to this length.
-        sort : bool, default True
-            Whether to sort variables by their absolute total contributions.
-
-        Returns
-        -------
-        str
-            HTML string representation of the decomposition results
-        """
-        if not hasattr(self, "total_difference"):
-            return "<p><strong>OaxacaResults</strong> (not yet computed - call two_fold() first)</p>"
-
-        if self.direction == "group0 - group1":
-            direction_text = f"{self._oaxaca.groups_[0]} - {self._oaxaca.groups_[1]}"
-        else:
-            direction_text = f"{self._oaxaca.groups_[1]} - {self._oaxaca.groups_[0]}"
-
-        detailed_table_html = self._create_detailed_contributions_table(display_len, sort)
-
-        removal_section = ""
-        if self.removal_info["has_removals"]:
-            removal_section = f"""
-            <div style="margin-top: 15px; padding: 10px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px;">
-                <strong>⚠️ Category Removal Impact:</strong> {self.removal_info["removal_contribution"]:.4f}
-                ({self.removal_info["removal_contribution_pct"]:.1f}% of total difference)
-            </div>
-            """
-
-            # Add detailed removal results if available
-            removal_details = create_removal_details_html(self.removal_info)
-            removal_section += removal_details
-
-        html = f"""
-        <div style="font-family: Arial, sans-serif; max-width: 1000px;">
-            <h3 style="color: #2c3e50; margin-bottom: 15px;">Oaxaca-Blinder Decomposition Results</h3>
-
-            <div style="margin-bottom: 15px;">
-                <p style="margin: 3px 0;"><strong>Group Variable:</strong> {self._oaxaca.group_variable} | <strong>Groups:</strong> {self._oaxaca.groups_[0]} vs {self._oaxaca.groups_[1]} | <strong>Direction:</strong> {direction_text} | <strong>Weights:</strong> {self.weights}</p>
-                <p style="margin: 3px 0;"><strong>Total Difference:</strong> {self.total_difference:.4f} | <strong>Mix-shift:</strong> {self.explained:.4f} ({self.explained / abs(self.total_difference) * 100:.1f}%) | <strong>Within-slice:</strong> {self.unexplained:.4f} ({self.unexplained / abs(self.total_difference) * 100:.1f}%)</p>
-            </div>
-
-            {removal_section}
-
-            <h4 style="color: #2c3e50; margin-top: 20px; margin-bottom: 10px;">Detailed Variable Contributions</h4>
-            {detailed_table_html}
-
-            <div style="margin-top: 15px; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
-                <p style="margin: 0; font-size: 0.9em; color: #666;">
-                    <strong>💡 For programmatic access:</strong><br>
-                    • <code>contributions</code> - aggregated categorical variables<br>
-                    • <code>detailed_contributions</code> - individual categories with hierarchy<br>
-                    • <code>removal_info</code> - per-group removal impact details
-                </p>
-            </div>
-        </div>
-        """
-        return html
+        column_names = [
+            "explained_detailed",
+            "explained_detailed_pct",
+            "unexplained_detailed",
+            "unexplained_detailed_pct",
+            "total",
+            "total_pct",
+        ]
+        return OaxacaResults.to_html(self, column_names=column_names, display_len=display_len, sort=sort)
 
     def print_ols(self, display_len: Optional[int] = None):
         """Print OLS regression results for each group.
@@ -738,11 +712,28 @@ class ThreeFoldResults(OaxacaResults):
             A table with MultiIndex (variable_group, Category) showing individual
             category contributions with their parent categorical variable.
         """
-        df = pd.DataFrame({
-            "Variable": self.endowment_detailed.index.tolist(),
-            "Endowment": self.endowment_detailed,
-            "Coefficient": self.coefficient_detailed,
-            "Interaction": self.interaction_detailed,
-        })
+        return OaxacaResults.detailed_contributions(
+            self,
+            {
+                "endowment_detailed": self.endowment_detailed,
+                "coefficient_detailed": self.coefficient_detailed,
+                "interaction_detailed": self.interaction_detailed,
+            },
+        )
 
-        return df
+    def _repr_html_(self) -> str:
+        """Rich HTML display for Jupyter notebooks with detailed information."""
+        return self.to_html(display_len=None, sort=True)
+
+    def to_html(self, display_len: Optional[int] = None, sort: bool = True) -> str:
+        column_names = [
+            "endowment_detailed",
+            "endowment_detailed_pct",
+            "coefficient_detailed",
+            "coefficient_detailed_pct",
+            "interaction_detailed",
+            "interaction_detailed_pct",
+            "total",
+            "total_pct",
+        ]
+        return OaxacaResults.to_html(self, column_names=column_names, display_len=display_len, sort=sort)
