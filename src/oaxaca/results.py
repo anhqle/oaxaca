@@ -254,15 +254,17 @@ class OaxacaResults:
             "has_removals": bool(has_removals),
         }
 
-    @cached_property
-    def detailed_contributions(self, **kwargs) -> pd.DataFrame:
+    def detailed_contributions(self, decomposition_components: dict[str, pd.Series]) -> pd.DataFrame:
         """
-        kwargs are the decomposition terms
+        decomposition_components are the decomposition terms
+        - for two_fold: explained + unexplained
+        - for three_fold: endowment + coefficient + interaction
+
+        These are pandas Series indexed by variable names.
         """
         index_tuples = []
         result_rows = []
 
-        decomposition_components = kwargs  # k = ["explained_detailed", "unexplained_detailed"]
         decomposition_components["total"] = sum(decomposition_components.values())
 
         for var_name in self.mean_X_0.index:
@@ -287,10 +289,25 @@ class OaxacaResults:
             result_rows.append(result_row)
 
         # Create MultiIndex DataFrame
-        index = pd.MultiIndex.from_tuples(index_tuples, names=("Variable_Group", "Category"))
+        index = pd.MultiIndex.from_tuples(index_tuples, names=("variable_group", "category"))
         df = pd.DataFrame(result_rows, index=index)
 
         return df
+
+    def contributions(self) -> pd.DataFrame:
+        """
+        Create a table showing aggregated contributions (i.e. categorical variable gets the sum of its dummies).
+        """
+        detailed_df = self.detailed_contributions().drop(columns=["variable_type"])
+
+        # Group by the first level of MultiIndex (variable_group) and sum
+        # Use sort=False to preserve the original order from explained_detailed.index
+        aggregated = detailed_df.groupby(level="variable_group", sort=False).sum()
+
+        aggregated = aggregated.reset_index()
+        aggregated = aggregated.rename(columns={"variable_group": "variable"})
+
+        return aggregated
 
     def __repr__(self):
         return f"OaxacaResults(groups={self._oaxaca.groups_}, group_variable='{self._oaxaca.group_variable}')"
@@ -326,7 +343,6 @@ class TwoFoldResults(OaxacaResults):
         self.coef_nondiscriminatory = coef_nondiscriminatory
         self.weights = weights
 
-    @cached_property
     def contributions(self) -> pd.DataFrame:
         """
         Create a table showing only categorical variable contributions (aggregated).
@@ -338,27 +354,8 @@ class TwoFoldResults(OaxacaResults):
             and their corresponding percentages. Only includes categorical variables
             and continuous variables, not individual dummy categories.
         """
-        # Get detailed contributions and aggregate by Variable_Group
-        detailed_df = self.detailed_contributions
+        return super().contributions()
 
-        # Group by the first level of MultiIndex (Variable_Group) and sum
-        # Use sort=False to preserve the original order from explained_detailed.index
-        aggregated = detailed_df.groupby(level="Variable_Group", sort=False).agg({
-            "Mix-shift": "sum",
-            "Within-slice": "sum",
-            "Total": "sum",
-            "Mix-shift %": "sum",
-            "Within-slice %": "sum",
-            "Total %": "sum",
-        })
-
-        # Reset index to make Variable_Group a regular column
-        aggregated = aggregated.reset_index()
-        aggregated = aggregated.rename(columns={"Variable_Group": "Variable"})
-
-        return aggregated
-
-    @cached_property
     def detailed_contributions(self) -> pd.DataFrame:
         """
         Create a table showing detailed contributions with proper hierarchical structure.
@@ -366,13 +363,13 @@ class TwoFoldResults(OaxacaResults):
         Returns
         -------
         pd.DataFrame
-            A table with MultiIndex (Variable_Group, Category) showing individual
+            A table with MultiIndex (variable_group, Category) showing individual
             category contributions with their parent categorical variable.
         """
-        return super().detailed_contributions(
-            explained_detailed=self.explained_detailed,
-            unexplained_detailed=self.unexplained_detailed,
-        )
+        return super().detailed_contributions({
+            "explained_detailed": self.explained_detailed,
+            "unexplained_detailed": self.unexplained_detailed,
+        })
 
     def _create_detailed_contributions_table(self, display_len: Optional[int] = None, sort: bool = True) -> str:
         """Create detailed contributions table in HTML format.
@@ -431,7 +428,7 @@ class TwoFoldResults(OaxacaResults):
             lines.append("</tr>")
 
             # Individual categories only if it's truly categorical (multiple categories)
-            var_metadata = detailed_df.loc[detailed_df.index.get_level_values("Variable_Group") == var_name]
+            var_metadata = detailed_df.loc[detailed_df.index.get_level_values("variable_group") == var_name]
             if len(var_metadata) > 1:  # More than one category means it's categorical
                 for category_name, detail_row in var_metadata.iterrows():
                     category_explained = detail_row["Mix-shift"]
@@ -735,7 +732,7 @@ class ThreeFoldResults(OaxacaResults):
         Returns
         -------
         pd.DataFrame
-            A table with MultiIndex (Variable_Group, Category) showing individual
+            A table with MultiIndex (variable_group, Category) showing individual
             category contributions with their parent categorical variable.
         """
         df = pd.DataFrame({
