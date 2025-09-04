@@ -79,6 +79,84 @@ def test_twofold(sample_data):
     assert np.isclose(results.unexplained_detailed["female"], -1.16526457)
 
 
+def test_threefold(sample_data):
+    """Test that three-fold decomposition results match expected values."""
+    model = Oaxaca()
+    formula = "exp(ln_real_wage) ~ age + female + C(education_level, contr.treatment('high_school'))"
+    model.fit(formula, sample_data, group_variable="foreign_born")
+
+    # Run decomposition
+    results = model.three_fold()
+
+    # Verify the three-fold decomposition identity: total = endowment + coefficient + interaction
+    assert np.isclose(results.total_difference, results.endowment + results.coefficient + results.interaction)
+
+    # Test that detailed components sum to their totals
+    assert np.isclose(results.endowment_detailed.sum(), results.endowment, rtol=1e-10)
+    assert np.isclose(results.coefficient_detailed.sum(), results.coefficient, rtol=1e-10)
+    assert np.isclose(results.interaction_detailed.sum(), results.interaction, rtol=1e-10)
+
+    assert np.isclose(results.total_difference, 3.015574)
+    assert np.isclose(results.endowment, 1.6165339)
+    assert np.isclose(results.coefficient, 2.8333261)
+    assert np.isclose(results.interaction, -1.4342857)
+
+    assert np.isclose(results.endowment_detailed["age"], -0.51677529)
+    assert np.isclose(results.coefficient_detailed["age"], 7.55853070)
+    assert np.isclose(results.interaction_detailed["age"], -1.23237194)
+
+    assert np.isclose(results.endowment_detailed["female"], -0.27265166)
+    assert np.isclose(results.coefficient_detailed["female"], -1.16526457)
+    assert np.isclose(results.interaction_detailed["female"], -0.25043038)
+
+
+def test_threefold_gu_adjustment(sample_data):
+    """Test three-fold decomposition with GU adjustment produces expected results."""
+    model = Oaxaca()
+    formula = "exp(ln_real_wage) ~ age + female + C(education_level, contr.treatment('high_school'))"
+    model.fit(formula, sample_data, group_variable="foreign_born")
+
+    # Run decomposition with GU adjustment
+    results = model.three_fold(gu_adjustment="unweighted")
+
+    # Verify the three-fold decomposition identity still holds
+    total_check = results.endowment + results.coefficient + results.interaction
+    assert np.isclose(results.total_difference, total_check)
+
+    # Test that detailed components sum to their totals with GU adjustment
+    assert np.isclose(results.endowment_detailed.sum(), results.endowment, rtol=1e-10)
+    assert np.isclose(results.coefficient_detailed.sum(), results.coefficient, rtol=1e-10)
+    assert np.isclose(results.interaction_detailed.sum(), results.interaction, rtol=1e-10)
+
+    # Check detailed endowment components for specific coefficients
+    assert np.isclose(results.endowment_detailed["age"], -0.51677529)
+    assert np.isclose(results.endowment_detailed["female"], -0.27265166)
+    lths_label = "C(education_level, contr.treatment('high_school'))[LTHS]"
+    college_label = "C(education_level, contr.treatment('high_school'))[college]"
+    assert np.isclose(results.endowment_detailed[lths_label], 2.17644672)
+    assert np.isclose(results.endowment_detailed[college_label], -0.07907587)
+
+    # Check detailed coefficient components for specific coefficients
+    assert np.isclose(results.coefficient_detailed["age"], 7.55853070)
+    assert np.isclose(results.coefficient_detailed["female"], -1.16526457)
+    assert np.isclose(results.coefficient_detailed[lths_label], 0.06459830)
+    assert np.isclose(results.coefficient_detailed[college_label], 0.58246411)
+
+    # Check detailed interaction components for specific coefficients
+    assert np.isclose(results.interaction_detailed["age"], -1.23237194)
+    assert np.isclose(results.interaction_detailed["female"], -0.25043038)
+    assert np.isclose(results.interaction_detailed[lths_label], -0.04486771)
+    assert np.isclose(results.interaction_detailed[college_label], 0.33558627)
+
+    # Check intercept, which should be adjusted by GU adjustment
+    assert np.isclose(results.endowment_detailed["Intercept"], 0.0)
+    assert np.isclose(results.coefficient_detailed["Intercept"], -4.26374940)
+    assert np.isclose(results.interaction_detailed["Intercept"], 0.0)
+
+    # Verify GU adjustment was applied by checking variable names include base categories
+    assert "C(education_level, contr.treatment('high_school'))[high_school]" in results.endowment_detailed.index
+
+
 def test_twofold_gu_adjustment(sample_data):
     """Test two-fold decomposition with GU adjustment produces expected results."""
     model = Oaxaca()
@@ -341,54 +419,45 @@ def test_weighted_gu_adjustment_intercept_equals_mean_outcome():
 
 def test_detailed_contributions_method():
     """Test detailed_contributions returns correct structure and values with mock data."""
-    from oaxaca.results import OaxacaResults
+    from oaxaca.results import TwoFoldResults
 
-    # Create mock Oaxaca instance
     mock_oaxaca = type("MockOaxaca", (), {"groups_": [0, 1], "group_variable": "group"})()
-
-    # Create simple mock data for decomposition
     explained_detailed = pd.Series({"Intercept": 1.0, "x": 2.0, "C(cat)[B]": 0.5, "C(cat)[C]": -0.3})
-
     unexplained_detailed = pd.Series({"Intercept": -0.5, "x": 1.5, "C(cat)[B]": 0.2, "C(cat)[C]": 0.1})
 
-    # Mock categorical mapping
-    categorical_mapping = {"C(cat)": ["C(cat)[B]", "C(cat)[C]"]}
-
-    # Create OaxacaResults with mock data
-    results = OaxacaResults(
+    results = TwoFoldResults(
         oaxaca_instance=mock_oaxaca,
         total_difference=4.5,
         explained=3.2,
         unexplained=1.3,
         explained_detailed=explained_detailed,
         unexplained_detailed=unexplained_detailed,
-        X_diff=pd.Series({"Intercept": 1, "x": 2, "C(cat)[B]": 0.5, "C(cat)[C]": -0.3}),
         coef_nondiscriminatory=pd.Series({"Intercept": 1, "x": 1, "C(cat)[B]": 1, "C(cat)[C]": 1}),
         weights={0: 0.5, 1: 0.5},
         mean_X_0=pd.Series({"Intercept": 1, "x": 2, "C(cat)[B]": 0.5, "C(cat)[C]": 0}),
         mean_X_1=pd.Series({"Intercept": 1, "x": 0, "C(cat)[B]": 0, "C(cat)[C]": 0.3}),
-        categorical_mapping=categorical_mapping,
+        categorical_to_dummy={"C(cat)": ["C(cat)[B]", "C(cat)[C]"]},
         direction="group0 - group1",
     )
 
     # Get actual result
-    detailed = results.detailed_contributions
+    detailed = results.detailed_contributions()
 
     # Create expected DataFrame
     index = pd.MultiIndex.from_tuples(
         [("Intercept", "Intercept"), ("x", "x"), ("C(cat)", "C(cat)[B]"), ("C(cat)", "C(cat)[C]")],
-        names=["Variable_Group", "Category"],
+        names=("variable_group", "category"),
     )
 
     expected = pd.DataFrame(
         {
-            "Mix-shift": [1.0, 2.0, 0.5, -0.3],
-            "Within-slice": [-0.5, 1.5, 0.2, 0.1],
-            "Total": [0.5, 3.5, 0.7, -0.2],
-            "Mix-shift %": [22.222222, 44.444444, 11.111111, -6.666667],
-            "Within-slice %": [-11.111111, 33.333333, 4.444444, 2.222222],
-            "Total %": [11.111111, 77.777778, 15.555556, -4.444444],
-            "Variable_Type": ["continuous", "continuous", "categorical", "categorical"],
+            "explained_detailed": [1.0, 2.0, 0.5, -0.3],
+            "explained_detailed_pct": [22.222222, 44.444444, 11.111111, -6.666667],
+            "unexplained_detailed": [-0.5, 1.5, 0.2, 0.1],
+            "unexplained_detailed_pct": [-11.111111, 33.333333, 4.444444, 2.222222],
+            "total": [0.5, 3.5, 0.7, -0.2],
+            "total_pct": [11.111111, 77.777778, 15.555556, -4.444444],
+            "variable_type": ["continuous", "continuous", "categorical", "categorical"],
         },
         index=index,
     )
@@ -399,46 +468,39 @@ def test_detailed_contributions_method():
 
 def test_contributions_method():
     """Test contributions method aggregates detailed_contributions correctly with mock data."""
-    from oaxaca.results import OaxacaResults
+    from oaxaca.results import TwoFoldResults
 
-    # Create mock Oaxaca instance
     mock_oaxaca = type("MockOaxaca", (), {"groups_": [0, 1], "group_variable": "group"})()
-
-    # Create mock data where categorical variable has multiple categories
     explained_detailed = pd.Series({"Intercept": 1.0, "x": 2.0, "C(cat)[B]": 0.5, "C(cat)[C]": -0.3})
-
     unexplained_detailed = pd.Series({"Intercept": -0.5, "x": 1.5, "C(cat)[B]": 0.2, "C(cat)[C]": 0.1})
 
-    categorical_mapping = {"C(cat)": ["C(cat)[B]", "C(cat)[C]"]}
-
-    results = OaxacaResults(
+    results = TwoFoldResults(
         oaxaca_instance=mock_oaxaca,
         total_difference=4.5,
         explained=3.2,
         unexplained=1.3,
         explained_detailed=explained_detailed,
         unexplained_detailed=unexplained_detailed,
-        X_diff=pd.Series({"Intercept": 1, "x": 2, "C(cat)[B]": 0.5, "C(cat)[C]": -0.3}),
         coef_nondiscriminatory=pd.Series({"Intercept": 1, "x": 1, "C(cat)[B]": 1, "C(cat)[C]": 1}),
         weights={0: 0.5, 1: 0.5},
         mean_X_0=pd.Series({"Intercept": 1, "x": 2, "C(cat)[B]": 0.5, "C(cat)[C]": 0}),
         mean_X_1=pd.Series({"Intercept": 1, "x": 0, "C(cat)[B]": 0, "C(cat)[C]": 0.3}),
-        categorical_mapping=categorical_mapping,
+        categorical_to_dummy={"C(cat)": ["C(cat)[B]", "C(cat)[C]"]},
         direction="group0 - group1",
     )
 
     # Get actual result
-    contrib = results.contributions
+    contrib = results.contributions()
 
     # Create expected DataFrame
     expected = pd.DataFrame({
-        "Variable": ["Intercept", "x", "C(cat)"],
-        "Mix-shift": [1.0, 2.0, 0.2],  # 0.5 + (-0.3) for categorical
-        "Within-slice": [-0.5, 1.5, 0.3],  # 0.2 + 0.1 for categorical
-        "Total": [0.5, 3.5, 0.5],
-        "Mix-shift %": [22.222222, 44.444444, 4.444444],
-        "Within-slice %": [-11.111111, 33.333333, 6.666667],
-        "Total %": [11.111111, 77.777778, 11.111111],
+        "variable": ["Intercept", "x", "C(cat)"],
+        "explained_detailed": [1.0, 2.0, 0.2],  # 0.5 + (-0.3) for categorical
+        "explained_detailed_pct": [22.222222, 44.444444, 4.444444],
+        "unexplained_detailed": [-0.5, 1.5, 0.3],  # 0.2 + 0.1 for categorical
+        "unexplained_detailed_pct": [-11.111111, 33.333333, 6.666667],
+        "total": [0.5, 3.5, 0.5],
+        "total_pct": [11.111111, 77.777778, 11.111111],
     })
 
     # Compare DataFrames

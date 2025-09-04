@@ -8,7 +8,7 @@ import statsmodels.api as sm
 from formulaic import Formula
 
 if TYPE_CHECKING:
-    from .results import OaxacaResults
+    from .results import ThreeFoldResults, TwoFoldResults
 
 from .formulaic_utils import (
     dummies,
@@ -125,6 +125,19 @@ class Oaxaca:
         # At this point, the two groups have the same categories, so it doesn't matter which one we take
         del y_group, X_group  # Release memory
 
+        # Check for zero total difference early to avoid division by zero issues
+        group_0, group_1 = self.groups_
+        mean_y_0 = self.group_stats_[group_0]["mean_y"]
+        mean_y_1 = self.group_stats_[group_1]["mean_y"]
+        total_difference = mean_y_0 - mean_y_1
+
+        if abs(total_difference) < 1e-10:
+            raise ValueError(
+                f"Total difference between groups is effectively zero ({total_difference:.2e}). "
+                f"Group {group_0} mean: {mean_y_0:.6f}, Group {group_1} mean: {mean_y_1:.6f}. "
+                "Decomposition is not meaningful when group means are identical."
+            )
+
         # Return self to allow method chaining
         return self
 
@@ -138,12 +151,47 @@ class Oaxaca:
         if abs(sum(weights.values()) - 1.0) > 1e-10:
             raise ValueError("Weights must sum to 1.0")
 
+    def compute_x_and_coef(self, gu_adjustment: Literal["none", "unweighted", "weighted"] = "none"):
+        """
+        Compute E(X) and $$\beta$$ for both groups, which is all that is needed
+        for both two-fold and three-fold decompositions.
+
+        gu_adjustment :
+            - "none": No adjustment (default)
+            - "unweighted": Apply Gardeazabal and Ugidos (2004) adjustment. This is equivalent to running the
+                decomposition leaving out one category at a time, then take the average contributions
+            - "weighted": Apply Gardeazabal and Ugidos (2004) adjustment with
+              weights based on category frequencies. This is equivalent to making the intercept the overall mean outcome,
+              leaving the coefficients as deviations from the overall mean.
+        """
+        if gu_adjustment not in ["none", "unweighted", "weighted"]:
+            raise ValueError("gu_adjustment must be one of: 'none', 'unweighted', 'weighted'")
+
+        group_0, group_1 = self.groups_
+        coef_0 = self.coef_[group_0]
+        coef_1 = self.coef_[group_1]
+        mean_X_0 = self.group_stats_[group_0]["mean_X"]
+        mean_X_1 = self.group_stats_[group_1]["mean_X"]
+
+        if gu_adjustment != "none":
+            mean_X_0 = self.group_stats_all_categories_[group_0]["mean_X"]
+            mean_X_1 = self.group_stats_all_categories_[group_1]["mean_X"]
+            coef_0 = self._apply_gu_adjustment(coef_0, weight=mean_X_0 if gu_adjustment == "weighted" else None)
+            coef_1 = self._apply_gu_adjustment(coef_1, weight=mean_X_1 if gu_adjustment == "weighted" else None)
+
+        # Since we potentially manipulated the indices of coef and mean_X, let's check that their indices
+        # are the same, only out of order. pandas won't do so for us
+        if not set(mean_X_0.index) == set(mean_X_1.index) == set(coef_0.index) == set(coef_1.index):
+            raise ValueError("Incompatible indices detected")
+
+        return mean_X_0, mean_X_1, coef_0, coef_1
+
     def two_fold(
         self,
         weights: dict[Any, float],
         gu_adjustment: Literal["none", "unweighted", "weighted"] = "none",
         direction: Literal["group0 - group1", "group1 - group0"] = "group0 - group1",
-    ) -> "OaxacaResults":
+    ) -> "TwoFoldResults":
         """
         Perform two-fold decomposition with customizable weights.
 
@@ -152,9 +200,6 @@ class Oaxaca:
         weights : dict of {group_value: float}, optional
             Weights for the non-discriminatory coefficient vector, where keys are
             the group values and values are the corresponding weights.
-
-        gu_adjustment : bool, default False
-            If True, apply Gardeazabal and Ugidos (2004) adjustment for omitted group problem.
 
         direction : str, default "group0 - group1"
             Direction of the decomposition. Options are:
@@ -168,72 +213,132 @@ class Oaxaca:
             A new OaxacaResults object with decomposition results
         """
         self._validate_weights_input(weights)
-        if gu_adjustment not in ["none", "unweighted", "weighted"]:
-            raise ValueError("gu_adjustment must be one of: 'none', 'unweighted', 'weighted'")
         if direction not in ["group0 - group1", "group1 - group0"]:
             raise ValueError("Direction must be either 'group0 - group1' or 'group1 - group0'")
 
-        # Get group references
         group_0, group_1 = self.groups_
-
-        # Get coefficients and mean X values
-        coef_0 = self.coef_[group_0]
-        coef_1 = self.coef_[group_1]
-        mean_X_0 = self.group_stats_[group_0]["mean_X"]
-        mean_X_1 = self.group_stats_[group_1]["mean_X"]
-
-        # Apply GU adjustment if needed (after ensuring conformable dimensions)
-        if gu_adjustment != "none":
-            mean_X_0 = self.group_stats_all_categories_[group_0]["mean_X"]
-            mean_X_1 = self.group_stats_all_categories_[group_1]["mean_X"]
-            coef_0 = self._apply_gu_adjustment(coef_0, weight=mean_X_0 if gu_adjustment == "weighted" else None)
-            coef_1 = self._apply_gu_adjustment(coef_1, weight=mean_X_1 if gu_adjustment == "weighted" else None)
-
-        # Since we potentially manipulated the indices of coef and mean_X, let's check that their indices
-        # are the same, only out of order. pandas won't do so for us
-        if not set(mean_X_0.index) == set(mean_X_1.index) == set(coef_0.index) == set(coef_1.index):
-            raise ValueError("Incompatible indices detected")
-
-        # Get mean Y values
         mean_y_0 = self.group_stats_[group_0]["mean_y"]
         mean_y_1 = self.group_stats_[group_1]["mean_y"]
 
-        # Calculate non-discriminatory coefficient vector using dictionary weights
+        mean_X_0, mean_X_1, coef_0, coef_1 = self.compute_x_and_coef(gu_adjustment=gu_adjustment)
+        # Calculate non-discriminatory coefficient vector
         coef_nd = weights[group_0] * coef_0 + weights[group_1] * coef_1
 
-        # Calculate decomposition components, default: group0 - group1
+        # Calculate decomposition components
         total_diff = float(mean_y_0 - mean_y_1)
         explained = float((mean_X_0 - mean_X_1) @ coef_nd)
         explained_detailed = (mean_X_0 - mean_X_1) * coef_nd
         unexplained = float(mean_X_0 @ (coef_0 - coef_nd) + mean_X_1 @ (coef_nd - coef_1))
         unexplained_detailed = mean_X_0 * (coef_0 - coef_nd) + mean_X_1 * (coef_nd - coef_1)
-        X_diff = mean_X_0 - mean_X_1
         if direction == "group1 - group0":
             total_diff, explained, unexplained = -total_diff, -explained, -unexplained
-            explained_detailed, unexplained_detailed, X_diff = -explained_detailed, -unexplained_detailed, -X_diff
+            explained_detailed, unexplained_detailed = -explained_detailed, -unexplained_detailed
         # Get the appropriate categorical mapping based on whether GU adjustment was applied
         if gu_adjustment != "none":
-            categorical_mapping = term_dummies_gu_adjusted(self.X_model_spec)
+            categorical_to_dummy = term_dummies_gu_adjusted(self.X_model_spec)
         else:
-            categorical_mapping = term_dummies(self.X_model_spec)
+            categorical_to_dummy = term_dummies(self.X_model_spec)
 
         # Import here to avoid circular imports
-        from .results import OaxacaResults
+        from .results import TwoFoldResults
 
-        # Create and return new OaxacaResults object
-        return OaxacaResults(
+        return TwoFoldResults(
             oaxaca_instance=self,
             total_difference=total_diff,
             explained=explained,
             unexplained=unexplained,
             explained_detailed=explained_detailed,
             unexplained_detailed=unexplained_detailed,
-            X_diff=X_diff,
             coef_nondiscriminatory=coef_nd,
             weights=weights,
             mean_X_0=mean_X_0,
             mean_X_1=mean_X_1,
-            categorical_mapping=categorical_mapping,
+            categorical_to_dummy=categorical_to_dummy,
+            direction=direction,
+        )
+
+    def three_fold(
+        self,
+        gu_adjustment: Literal["none", "unweighted", "weighted"] = "none",
+        direction: Literal["group0 - group1", "group1 - group0"] = "group0 - group1",
+    ) -> "ThreeFoldResults":
+        """
+        Perform three-fold decomposition.
+
+        Parameters
+        ----------
+        gu_adjustment : Literal["none", "unweighted", "weighted"], default "none"
+            Type of Gardeazabal and Ugidos (2004) adjustment to apply:
+            - "none": No adjustment (default)
+            - "unweighted": Apply unweighted GU adjustment
+            - "weighted": Apply weighted GU adjustment
+
+        direction : str, default "group0 - group1"
+            Direction of the decomposition. Options are:
+            - "group0 - group1": Decompose group0 - group1 (default)
+            - "group1 - group0": Decompose group1 - group0
+            Where group0 is the first group alphabetically and group1 is the second.
+
+        Returns
+        -------
+        OaxacaResults
+            A new OaxacaResults object with decomposition results
+        """
+        if direction not in ["group0 - group1", "group1 - group0"]:
+            raise ValueError("Direction must be either 'group0 - group1' or 'group1 - group0'")
+
+        group_0, group_1 = self.groups_
+        mean_y_0 = self.group_stats_[group_0]["mean_y"]
+        mean_y_1 = self.group_stats_[group_1]["mean_y"]
+        mean_X_0, mean_X_1, coef_0, coef_1 = self.compute_x_and_coef(gu_adjustment=gu_adjustment)
+
+        # Calculate decomposition components
+        total_diff = float(mean_y_0 - mean_y_1)
+
+        # 1. Endowment effect: (X_0 - X_1) * β_1
+        endowment = float((mean_X_0 - mean_X_1) @ coef_1)
+        endowment_detailed = (mean_X_0 - mean_X_1) * coef_1
+        # 2. Coefficient effect: X_1 * (β_0 - β_1)
+        coefficient = float(mean_X_1 @ (coef_0 - coef_1))
+        coefficient_detailed = mean_X_1 * (coef_0 - coef_1)
+        # 3. Interaction effect: (X_0 - X_1) * (β_0 - β_1)
+        interaction = float((mean_X_0 - mean_X_1) @ (coef_0 - coef_1))
+        interaction_detailed = (mean_X_0 - mean_X_1) * (coef_0 - coef_1)
+
+        X_diff = mean_X_0 - mean_X_1
+
+        # Apply direction adjustment if needed
+        if direction == "group1 - group0":
+            total_diff = -total_diff
+            X_diff = -X_diff
+            endowment = -endowment
+            coefficient = -coefficient
+            interaction = -interaction
+            endowment_detailed = -endowment_detailed
+            coefficient_detailed = -coefficient_detailed
+            interaction_detailed = -interaction_detailed
+
+        # Get the appropriate categorical mapping based on whether GU adjustment was applied
+        if gu_adjustment != "none":
+            categorical_to_dummy = term_dummies_gu_adjusted(self.X_model_spec)
+        else:
+            categorical_to_dummy = term_dummies(self.X_model_spec)
+
+        # Import here to avoid circular imports
+        from .results import ThreeFoldResults
+
+        return ThreeFoldResults(
+            oaxaca_instance=self,
+            total_difference=total_diff,
+            endowment=endowment,
+            coefficient=coefficient,
+            interaction=interaction,
+            endowment_detailed=endowment_detailed,
+            coefficient_detailed=coefficient_detailed,
+            interaction_detailed=interaction_detailed,
+            mean_X_0=mean_X_0,
+            mean_X_1=mean_X_1,
+            categorical_to_dummy=categorical_to_dummy,
             direction=direction,
         )
 
