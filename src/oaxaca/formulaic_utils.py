@@ -2,18 +2,13 @@ from formulaic.utils.sentinels import Sentinel
 
 
 def get_base_category(contrast_state):
-    """
-    Get the base category for a categorical variable, handling UNSET case.
+    """Get the base category for a categorical variable, handling UNSET case.
 
-    Parameters
-    ----------
-    contrast_state : object
-        The contrast state from formulaic model spec
+    Args:
+        contrast_state: The contrast state from formulaic model spec.
 
-    Returns
-    -------
-    str
-        The base category (first level if UNSET, otherwise the specified base)
+    Returns:
+        The base category (first level if UNSET, otherwise the specified base).
     """
     base_category = contrast_state.contrasts.base
     if base_category == Sentinel.UNSET:
@@ -22,20 +17,15 @@ def get_base_category(contrast_state):
 
 
 def term_dummies(model_spec) -> dict:
-    """
-    Create mapping from categorical terms to their dummy column names.
+    """Create mapping from categorical terms to their dummy column names.
 
-    Parameters
-    ----------
-    model_spec : object
-        The model specification from formulaic containing terms, factors,
-        and column names
+    Args:
+        model_spec: The model specification from formulaic containing terms, factors,
+            and column names.
 
-    Returns
-    -------
-    dict
-        key: a term representing a categorical variable
-        value: list of dummy column names
+    Returns:
+        Dictionary mapping terms (representing categorical variables) to lists of
+        dummy column names.
     """
     results = {}
     for term in model_spec.terms:
@@ -46,8 +36,13 @@ def term_dummies(model_spec) -> dict:
 
 
 def dummies(model_spec) -> list:
-    """
-    Create a list of dummy column names from the model specification.
+    """Create a list of dummy column names from the model specification.
+
+    Args:
+        model_spec: The model specification from formulaic.
+
+    Returns:
+        List of dummy column names.
     """
     result = []
     for dummies in term_dummies(model_spec).values():
@@ -56,22 +51,17 @@ def dummies(model_spec) -> list:
 
 
 def term_dummies_gu_adjusted(model_spec) -> dict:
-    """
-    Generate categorical to dummy mapping for GU-adjusted coefficients.
+    """Generate categorical to dummy mapping for GU-adjusted coefficients.
+
     This includes base categories and uses reformatted variable names.
 
-    Parameters
-    ----------
-    model_spec : object
-        The model specification from formulaic containing terms, factors,
-        and column names
+    Args:
+        model_spec: The model specification from formulaic containing terms, factors,
+            and column names.
 
-    Returns
-    -------
-    dict
-        key: a term representing a categorical variable
-        value: list of dummy column names (including base category,
-        with reformatted names)
+    Returns:
+        Dictionary mapping terms (representing categorical variables) to lists of
+        dummy column names (including base category, with reformatted names).
     """
     results = {}
     for term in model_spec.terms:

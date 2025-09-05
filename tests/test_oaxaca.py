@@ -16,7 +16,11 @@ from oaxaca.formulaic_utils import (
 
 @pytest.fixture(scope="session")
 def sample_data():
-    """Load sample data from CSV for testing."""
+    """Load sample data from CSV for testing.
+
+    Returns:
+        DataFrame with sample data for testing.
+    """
     # Load the sample data using pandas without transformations
     df = pd.read_csv("tests/fixtures/sample_data.csv", na_values="NA")
     return df

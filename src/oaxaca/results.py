@@ -10,15 +10,11 @@ if TYPE_CHECKING:
 def create_removal_details_html(removal_details: dict) -> str:
     """Create HTML for detailed dummy variable removal results.
 
-    Parameters
-    ----------
-    removal_details : dict
-        Result from removal_info property containing removal information
+    Args:
+        removal_details: Result from removal_info property containing removal information.
 
-    Returns
-    -------
-    str
-        HTML string for removal details
+    Returns:
+        HTML string for removal details.
     """
     if not removal_details.get("has_removals"):
         return ""
@@ -67,22 +63,17 @@ def _format_cell(value, cell_type: str = "data", is_percentage: bool = False) ->
 
 
 def _truncate_variable_name(var_name: str, display_len: Optional[int] = None) -> str:
-    """
-    Truncate variable name to specified length if display_len is provided.
+    """Truncate variable name to specified length if display_len is provided.
+
     For categorical variables like 'education[T.LTHS]', only truncate the base name
     before the bracket and keep the bracket part intact.
 
-    Parameters
-    ----------
-    var_name : str
-        The variable name to potentially truncate
-    display_len : int, optional
-        Maximum length for variable names. If None, no truncation is applied.
+    Args:
+        var_name: The variable name to potentially truncate.
+        display_len: Maximum length for variable names. If None, no truncation is applied.
 
-    Returns
-    -------
-    str
-        The original or truncated variable name
+    Returns:
+        The original or truncated variable name.
     """
     if display_len is None or len(var_name) <= display_len:
         return var_name
@@ -107,21 +98,16 @@ def _truncate_variable_name(var_name: str, display_len: Optional[int] = None) ->
 
 
 def _extract_common_variable_name(dummy_vars):
-    """
-    Extract the common variable name from a list of dummy variable names.
+    """Extract the common variable name from a list of dummy variable names.
 
     For example, given ['education[T.high_school]', 'education[T.college]', 'education[T.graduate]'],
     this would return 'education'.
 
-    Parameters
-    ----------
-    dummy_vars : list
-        List of dummy variable names
+    Args:
+        dummy_vars: List of dummy variable names.
 
-    Returns
-    -------
-    str
-        The common variable name extracted from the dummy variables
+    Returns:
+        The common variable name extracted from the dummy variables.
     """
     if not dummy_vars:
         return ""
@@ -173,25 +159,12 @@ class OaxacaResults:
     def removal_info(self) -> dict:
         """Get detailed impact of removals per group and net impact.
 
-        Returns
-        -------
-        dict
-            {
-              'by_group': {
-                 group_value: {
-                    'removed_dummies': List[str],
-                    'share_removed': float,
-                    'outcome_pre_removal': float,
-                    'outcome_post_removal': float,
-                    'outcome_among_removed': float,
-                    'mean_adjustment': float,
-                 },
-                 ...
-              },
-              'removal_contribution': float,
-              'removal_contribution_pct': float,
-              'has_removals': bool,
-            }
+        Returns:
+            Dictionary containing removal information with the following structure:
+                - 'by_group': Dictionary mapping group values to their removal details
+                - 'removal_contribution': Net removal contribution as float
+                - 'removal_contribution_pct': Removal contribution as percentage of total difference
+                - 'has_removals': Boolean indicating if any removals occurred
         """
         by_group: dict[Any, dict[str, Any]] = {}
         if not hasattr(self._oaxaca, "dummy_removal_result_") or not self._oaxaca.dummy_removal_result_:
@@ -255,12 +228,16 @@ class OaxacaResults:
         }
 
     def detailed_contributions(self, decomposition_components: dict[str, pd.Series]) -> pd.DataFrame:
-        """
-        decomposition_components are the decomposition terms
-        - for two_fold: explained + unexplained
-        - for three_fold: endowment + coefficient + interaction
+        """Create detailed contributions table with decomposition components.
 
-        These are pandas Series indexed by variable names.
+        Args:
+            decomposition_components: The decomposition terms
+                - for two_fold: explained + unexplained
+                - for three_fold: endowment + coefficient + interaction
+                These are pandas Series indexed by variable names.
+
+        Returns:
+            DataFrame with detailed variable contributions.
         """
         index_tuples = []
         result_rows = []
@@ -296,8 +273,10 @@ class OaxacaResults:
         return df
 
     def contributions(self) -> pd.DataFrame:
-        """
-        Create a table showing aggregated contributions (i.e. categorical variable gets the sum of its dummies).
+        """Create a table showing aggregated contributions (i.e. categorical variable gets the sum of its dummies).
+
+        Returns:
+            DataFrame with aggregated variable contributions.
         """
         detailed_df = self.detailed_contributions().drop(columns=["variable_type"])
 
@@ -318,15 +297,14 @@ class OaxacaResults:
     ) -> str:
         """Create detailed contributions table in HTML format.
 
-        Parameters
-        ----------
-        column_names: list[str]
-            List of column names to include in the table.
-        display_len : int, optional
-            Maximum length for variable names in output tables. If provided,
-            variable names will be truncated to this length.
-        sort : bool, default True
-            Whether to sort variables by their absolute total contributions.
+        Args:
+            column_names: List of column names to include in the table.
+            display_len: Maximum length for variable names in output tables. If provided,
+                variable names will be truncated to this length.
+            sort: Whether to sort variables by their absolute total contributions.
+
+        Returns:
+            HTML string representation of the detailed contributions table.
         """
         # Get both dataframes from class properties
         detailed_df = self.detailed_contributions()
@@ -394,33 +372,25 @@ class OaxacaResults:
 
         This method must be implemented by subclasses to provide their specific header.
 
-        Returns
-        -------
-        str
-            HTML string for the header section
+        Returns:
+            HTML string for the header section.
 
-        Raises
-        ------
-        NotImplementedError
-            This method must be implemented by subclasses
+        Raises:
+            NotImplementedError: This method must be implemented by subclasses.
         """
         raise NotImplementedError("Subclasses must implement _create_header_html method")
 
     def to_html(self, column_names: list[str], display_len: Optional[int] = None, sort: bool = True) -> str:
         """Generate HTML representation with optional variable name truncation.
 
-        Parameters
-        ----------
-        display_len : int, optional
-            Maximum length for variable names in output tables. If provided,
-            variable names will be truncated to this length.
-        sort : bool, default True
-            Whether to sort variables by their absolute total contributions.
+        Args:
+            column_names: List of column names to include in the table.
+            display_len: Maximum length for variable names in output tables. If provided,
+                variable names will be truncated to this length.
+            sort: Whether to sort variables by their absolute total contributions.
 
-        Returns
-        -------
-        str
-            HTML string representation of the decomposition results
+        Returns:
+            HTML string representation of the decomposition results.
         """
         if not hasattr(self, "total_difference"):
             return "<p><strong>OaxacaResults</strong> (not yet computed - call two_fold() first)</p>"
@@ -487,12 +457,9 @@ class TwoFoldResults(OaxacaResults):
         self.weights = weights
 
     def contributions(self) -> pd.DataFrame:
-        """
-        Create a table showing only categorical variable contributions (aggregated).
+        """Create a table showing only categorical variable contributions (aggregated).
 
-        Returns
-        -------
-        pd.DataFrame
+        Returns:
             A table with columns for Variable, Mix-shift, Within-slice, Total,
             and their corresponding percentages. Only includes categorical variables
             and continuous variables, not individual dummy categories.
@@ -500,12 +467,9 @@ class TwoFoldResults(OaxacaResults):
         return super().contributions()
 
     def detailed_contributions(self) -> pd.DataFrame:
-        """
-        Create a table showing detailed contributions with proper hierarchical structure.
+        """Create a table showing detailed contributions with proper hierarchical structure.
 
-        Returns
-        -------
-        pd.DataFrame
+        Returns:
             A table with MultiIndex (variable_group, Category) showing individual
             category contributions with their parent categorical variable.
         """
@@ -520,10 +484,8 @@ class TwoFoldResults(OaxacaResults):
     def _create_header_html(self) -> str:
         """Create the header HTML section for TwoFold decomposition results with weight information.
 
-        Returns
-        -------
-        str
-            HTML string for the header section including weight information
+        Returns:
+            HTML string for the header section including weight information.
         """
         if self.direction == "group0 - group1":
             direction_text = f"{self._oaxaca.groups_[0]} - {self._oaxaca.groups_[1]}"
@@ -564,16 +526,9 @@ class TwoFoldResults(OaxacaResults):
     def print_ols(self, display_len: Optional[int] = None):
         """Print OLS regression results for each group.
 
-        Parameters
-        ----------
-        out : List[str], default ["diff"]
-            Controls which sections to print. Options are:
-            - "group0": Print results for group 0
-            - "group1": Print results for group 1
-            - "diff": Print coefficient comparison table
-        display_len : int, optional
-            Maximum length for variable names in output tables. If provided,
-            variable names will be truncated to this length.
+        Args:
+            display_len: Maximum length for variable names in output tables. If provided,
+                variable names will be truncated to this length.
         """
         print("OLS Regression Results by Group")
         print("=" * 60)
@@ -649,13 +604,10 @@ class TwoFoldResults(OaxacaResults):
             print(f"{display_var_name:<40} {first_coef:>12.4f} {second_coef:>12.4f} {diff_coef:>12.4f}")
 
     def x_difference_table(self) -> pd.DataFrame:
-        """
-        Create a table showing the difference in X (predictor variables) between the two groups.
+        """Create a table showing the difference in X (predictor variables) between the two groups.
 
-        Returns
-        -------
-        pd.DataFrame
-            A table with columns for Variable, Group 0 Mean, Group 1 Mean, and Difference
+        Returns:
+            A table with columns for Variable, Group 0 Mean, Group 1 Mean, and Difference.
         """
         # Create DataFrame using the actual mean_X values used in decomposition
         groups = self._oaxaca.groups_
@@ -669,14 +621,11 @@ class TwoFoldResults(OaxacaResults):
         return df
 
     def print_x(self, display_len: Optional[int] = None):
-        """
-        Print a formatted table showing the difference in X (predictor variables) between the two groups.
+        """Print a formatted table showing the difference in X (predictor variables) between the two groups.
 
-        Parameters
-        ----------
-        display_len : int, optional
-            Maximum length for variable names in output tables. If provided,
-            variable names will be truncated to this length.
+        Args:
+            display_len: Maximum length for variable names in output tables. If provided,
+                variable names will be truncated to this length.
         """
         print("Difference in X (Predictor Variables) Between Groups")
         print("=" * 80)
@@ -750,12 +699,9 @@ class ThreeFoldResults(OaxacaResults):
         return super().contributions()
 
     def detailed_contributions(self) -> pd.DataFrame:
-        """
-        Create a table showing detailed contributions with proper hierarchical structure.
+        """Create a table showing detailed contributions with proper hierarchical structure.
 
-        Returns
-        -------
-        pd.DataFrame
+        Returns:
             A table with MultiIndex (variable_group, Category) showing individual
             category contributions with their parent categorical variable.
         """
@@ -771,10 +717,8 @@ class ThreeFoldResults(OaxacaResults):
     def _create_header_html(self) -> str:
         """Create the header HTML section for ThreeFold decomposition results.
 
-        Returns
-        -------
-        str
-            HTML string for the header section
+        Returns:
+            HTML string for the header section.
         """
         if self.direction == "group0 - group1":
             direction_text = f"{self._oaxaca.groups_[0]} - {self._oaxaca.groups_[1]}"

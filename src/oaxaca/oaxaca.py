@@ -25,19 +25,13 @@ class Oaxaca:
     the difference in outcomes between two groups by decomposing it into
     explained and unexplained components.
 
-    Attributes
-    ----------
-    coef_ : dict
-        Dictionary mapping group values to their coefficients (pd.Series).
-    models_ : dict
-        Dictionary mapping group values to their fitted OLS models.
-    group_stats_ : dict
-        Dictionary mapping group values to their statistics including n_obs,
-        mean_y, mean_X, std_y, and r_squared.
-    group_variable_ : str
-        The name of the column in X that contains the group indicator.
-    groups_ : list
-        The unique groups identified in the data.
+    Attributes:
+        coef_: Dictionary mapping group values to their coefficients (pd.Series).
+        models_: Dictionary mapping group values to their fitted OLS models.
+        group_stats_: Dictionary mapping group values to their statistics including n_obs,
+            mean_y, mean_X, std_y, and r_squared.
+        group_variable_: The name of the column in X that contains the group indicator.
+        groups_: The unique groups identified in the data.
     """
 
     def __init__(self):
@@ -45,22 +39,15 @@ class Oaxaca:
         pass
 
     def fit(self, formula: str, data: pd.DataFrame, group_variable: str) -> "Oaxaca":
-        """
-        Fit the Oaxaca-Blinder decomposition model.
+        """Fit the Oaxaca-Blinder decomposition model.
 
-        Parameters
-        ----------
-        formula : str
-            The formula for the regression model
-        data : pd.DataFrame
-            The data containing all variables
-        group_variable : str
-            The name of the column in data that contains the group indicator
+        Args:
+            formula: The formula for the regression model.
+            data: The data containing all variables.
+            group_variable: The name of the column in data that contains the group indicator.
 
-        Returns
-        -------
-        self : Oaxaca
-            The fitted Oaxaca object for method chaining
+        Returns:
+            The fitted Oaxaca object for method chaining.
         """
 
         # Store user input
@@ -152,17 +139,16 @@ class Oaxaca:
             raise ValueError("Weights must sum to 1.0")
 
     def compute_x_and_coef(self, gu_adjustment: Literal["none", "unweighted", "weighted"] = "none"):
-        """
-        Compute E(X) and $$\beta$$ for both groups, which is all that is needed
-        for both two-fold and three-fold decompositions.
+        """Compute E(X) and β for both groups, which is all that is needed for both two-fold and three-fold decompositions.
 
-        gu_adjustment :
-            - "none": No adjustment (default)
-            - "unweighted": Apply Gardeazabal and Ugidos (2004) adjustment. This is equivalent to running the
-                decomposition leaving out one category at a time, then take the average contributions
-            - "weighted": Apply Gardeazabal and Ugidos (2004) adjustment with
-              weights based on category frequencies. This is equivalent to making the intercept the overall mean outcome,
-              leaving the coefficients as deviations from the overall mean.
+        Args:
+            gu_adjustment: Type of adjustment to apply. Options are:
+                - "none": No adjustment (default)
+                - "unweighted": Apply Gardeazabal and Ugidos (2004) adjustment. This is equivalent to running the
+                    decomposition leaving out one category at a time, then take the average contributions
+                - "weighted": Apply Gardeazabal and Ugidos (2004) adjustment with
+                  weights based on category frequencies. This is equivalent to making the intercept the overall mean outcome,
+                  leaving the coefficients as deviations from the overall mean.
         """
         if gu_adjustment not in ["none", "unweighted", "weighted"]:
             raise ValueError("gu_adjustment must be one of: 'none', 'unweighted', 'weighted'")
@@ -192,25 +178,19 @@ class Oaxaca:
         gu_adjustment: Literal["none", "unweighted", "weighted"] = "none",
         direction: Literal["group0 - group1", "group1 - group0"] = "group0 - group1",
     ) -> "TwoFoldResults":
-        """
-        Perform two-fold decomposition with customizable weights.
+        """Perform two-fold decomposition with customizable weights.
 
-        Parameters
-        ----------
-        weights : dict of {group_value: float}, optional
-            Weights for the non-discriminatory coefficient vector, where keys are
-            the group values and values are the corresponding weights.
+        Args:
+            weights: Weights for the non-discriminatory coefficient vector, where keys are
+                the group values and values are the corresponding weights.
+            gu_adjustment: Type of Gardeazabal and Ugidos (2004) adjustment to apply.
+            direction: Direction of the decomposition. Options are:
+                - "group0 - group1": Decompose group0 - group1 (default)
+                - "group1 - group0": Decompose group1 - group0
+                Where group0 is the first group alphabetically and group1 is the second.
 
-        direction : str, default "group0 - group1"
-            Direction of the decomposition. Options are:
-            - "group0 - group1": Decompose group0 - group1 (default)
-            - "group1 - group0": Decompose group1 - group0
-            Where group0 is the first group alphabetically and group1 is the second.
-
-        Returns
-        -------
-        OaxacaResults
-            A new OaxacaResults object with decomposition results
+        Returns:
+            A new TwoFoldResults object with decomposition results.
         """
         self._validate_weights_input(weights)
         if direction not in ["group0 - group1", "group1 - group0"]:
@@ -262,27 +242,20 @@ class Oaxaca:
         gu_adjustment: Literal["none", "unweighted", "weighted"] = "none",
         direction: Literal["group0 - group1", "group1 - group0"] = "group0 - group1",
     ) -> "ThreeFoldResults":
-        """
-        Perform three-fold decomposition.
+        """Perform three-fold decomposition.
 
-        Parameters
-        ----------
-        gu_adjustment : Literal["none", "unweighted", "weighted"], default "none"
-            Type of Gardeazabal and Ugidos (2004) adjustment to apply:
-            - "none": No adjustment (default)
-            - "unweighted": Apply unweighted GU adjustment
-            - "weighted": Apply weighted GU adjustment
+        Args:
+            gu_adjustment: Type of Gardeazabal and Ugidos (2004) adjustment to apply:
+                - "none": No adjustment (default)
+                - "unweighted": Apply unweighted GU adjustment
+                - "weighted": Apply weighted GU adjustment
+            direction: Direction of the decomposition. Options are:
+                - "group0 - group1": Decompose group0 - group1 (default)
+                - "group1 - group0": Decompose group1 - group0
+                Where group0 is the first group alphabetically and group1 is the second.
 
-        direction : str, default "group0 - group1"
-            Direction of the decomposition. Options are:
-            - "group0 - group1": Decompose group0 - group1 (default)
-            - "group1 - group0": Decompose group1 - group0
-            Where group0 is the first group alphabetically and group1 is the second.
-
-        Returns
-        -------
-        OaxacaResults
-            A new OaxacaResults object with decomposition results
+        Returns:
+            A new ThreeFoldResults object with decomposition results.
         """
         if direction not in ["group0 - group1", "group1 - group0"]:
             raise ValueError("Direction must be either 'group0 - group1' or 'group1 - group0'")
@@ -343,10 +316,7 @@ class Oaxaca:
         )
 
     def _harmonize_common_support(self, data: pd.DataFrame):
-        """
-        Solve the common support problem by removing rows
-        so that the two groups have the same set of dummies/categories
-        """
+        """Solve the common support problem by removing rows so that the two groups have the same set of dummies/categories."""
         y = {}
         X = {}
         X_model_spec = {}
@@ -409,8 +379,7 @@ class Oaxaca:
         return pd.concat(harmonized_data_list, axis=0, ignore_index=True)
 
     def _apply_gu_adjustment(self, coef: pd.Series, weight: Optional[pd.Series] = None) -> pd.Series:
-        """
-        Apply Gardeazabal and Ugidos (2004) adjustment for omitted group problem.
+        """Apply Gardeazabal and Ugidos (2004) adjustment for omitted group problem.
 
         For each categorical variable:
         1. Insert coefficient of 0 for omitted base category
@@ -418,21 +387,15 @@ class Oaxaca:
         3. Subtract this mean from each dummy coefficient
         4. Add this mean to the intercept coefficient
 
-        Parameters
-        ----------
-        coef : pd.Series
-            Original coefficients from OLS regression
-        weight : pd.Series, optional
-            If not set, perform the "classic" GU adjustment.
-            If set, a useful set of weights is the relative frequency of the categories,
-              which result in the adjusted Intercept equalling the overall mean outcome,
-              and consequently the coef as deviation from the overall mean
+        Args:
+            coef: Original coefficients from OLS regression.
+            weight: If not set, perform the "classic" GU adjustment.
+                If set, a useful set of weights is the relative frequency of the categories,
+                which result in the adjusted Intercept equalling the overall mean outcome,
+                and consequently the coef as deviation from the overall mean.
 
-
-        Returns
-        -------
-        pd.Series
-            Adjusted coefficients
+        Returns:
+            Adjusted coefficients.
         """
 
         new_coef = pd.Series(dtype=float)
