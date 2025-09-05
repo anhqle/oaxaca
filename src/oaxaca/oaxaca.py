@@ -138,7 +138,7 @@ class Oaxaca:
         if abs(sum(weights.values()) - 1.0) > 1e-10:
             raise ValueError("Weights must sum to 1.0")
 
-    def compute_x_and_coef(self, gu_adjustment: Literal["none", "unweighted", "weighted"] = "none"):
+    def _compute_x_and_coef(self, gu_adjustment: Literal["none", "unweighted", "weighted"] = "none"):
         """Compute E(X) and β for both groups, which is all that is needed for both two-fold and three-fold decompositions.
 
         Args:
@@ -200,7 +200,7 @@ class Oaxaca:
         mean_y_0 = self.group_stats_[group_0]["mean_y"]
         mean_y_1 = self.group_stats_[group_1]["mean_y"]
 
-        mean_X_0, mean_X_1, coef_0, coef_1 = self.compute_x_and_coef(gu_adjustment=gu_adjustment)
+        mean_X_0, mean_X_1, coef_0, coef_1 = self._compute_x_and_coef(gu_adjustment=gu_adjustment)
         # Calculate non-discriminatory coefficient vector
         coef_nd = weights[group_0] * coef_0 + weights[group_1] * coef_1
 
@@ -263,7 +263,7 @@ class Oaxaca:
         group_0, group_1 = self.groups_
         mean_y_0 = self.group_stats_[group_0]["mean_y"]
         mean_y_1 = self.group_stats_[group_1]["mean_y"]
-        mean_X_0, mean_X_1, coef_0, coef_1 = self.compute_x_and_coef(gu_adjustment=gu_adjustment)
+        mean_X_0, mean_X_1, coef_0, coef_1 = self._compute_x_and_coef(gu_adjustment=gu_adjustment)
 
         # Calculate decomposition components
         total_diff = float(mean_y_0 - mean_y_1)

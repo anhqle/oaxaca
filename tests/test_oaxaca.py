@@ -56,7 +56,10 @@ def test_two_fold_invalid_weights(sample_data):
 
 
 def test_twofold(sample_data):
-    """Test that two-fold decomposition results match expected values."""
+    """Test that two-fold decomposition results match expected values.
+
+    Expected values are based on R's oaxaca package https://cran.r-project.org/web/packages/oaxaca/index.html
+    """
     model = Oaxaca()
     formula = "exp(ln_real_wage) ~ age + female + C(education_level, contr.treatment('high_school'))"
     model.fit(formula, sample_data, group_variable="foreign_born")
@@ -84,7 +87,10 @@ def test_twofold(sample_data):
 
 
 def test_threefold(sample_data):
-    """Test that three-fold decomposition results match expected values."""
+    """Test that three-fold decomposition results match expected values.
+
+    Expected values are based on R's oaxaca package https://cran.r-project.org/web/packages/oaxaca/index.html
+    """
     model = Oaxaca()
     formula = "exp(ln_real_wage) ~ age + female + C(education_level, contr.treatment('high_school'))"
     model.fit(formula, sample_data, group_variable="foreign_born")
@@ -115,7 +121,10 @@ def test_threefold(sample_data):
 
 
 def test_threefold_gu_adjustment(sample_data):
-    """Test three-fold decomposition with GU adjustment produces expected results."""
+    """Test three-fold decomposition with GU adjustment produces expected results.
+
+    Expected values are based on R's oaxaca package https://cran.r-project.org/web/packages/oaxaca/index.html
+    """
     model = Oaxaca()
     formula = "exp(ln_real_wage) ~ age + female + C(education_level, contr.treatment('high_school'))"
     model.fit(formula, sample_data, group_variable="foreign_born")
@@ -162,7 +171,9 @@ def test_threefold_gu_adjustment(sample_data):
 
 
 def test_twofold_gu_adjustment(sample_data):
-    """Test two-fold decomposition with GU adjustment produces expected results."""
+    """Test two-fold decomposition with GU adjustment produces expected results.
+
+    Expected values are based on R's oaxaca package https://cran.r-project.org/web/packages/oaxaca/index.html"""
     model = Oaxaca()
     formula = "exp(ln_real_wage) ~ age + female + C(education_level, contr.treatment('high_school'))"
     model.fit(formula, sample_data, group_variable="foreign_born")
