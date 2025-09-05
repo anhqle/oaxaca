@@ -375,7 +375,36 @@ class OaxacaResults:
                         lines.append(_format_cell(detail_row[col_name], is_percentage=col_name.endswith("_pct")))
                     lines.append("</tr>")
 
+        # Add total row
+        if len(categorical_df) > 0:
+            lines.append('<tr style="font-weight: bold; background-color: #e6f3ff; border-top: 2px solid #007acc;">')
+            lines.append(_format_cell("Total", "header"))
+            for col_name in column_names:
+                total_value = categorical_df[col_name].sum()
+                lines.append(_format_cell(total_value, is_percentage=col_name.endswith("_pct")))
+            lines.append("</tr>")
+
+        lines.append("</tbody>")
+        lines.append("</table>")
+
         return "".join(lines)
+
+    def _create_header_html(self) -> str:
+        """Create the header HTML section for the decomposition results.
+
+        This method must be implemented by subclasses to provide their specific header.
+
+        Returns
+        -------
+        str
+            HTML string for the header section
+
+        Raises
+        ------
+        NotImplementedError
+            This method must be implemented by subclasses
+        """
+        raise NotImplementedError("Subclasses must implement _create_header_html method")
 
     def to_html(self, column_names: list[str], display_len: Optional[int] = None, sort: bool = True) -> str:
         """Generate HTML representation with optional variable name truncation.
@@ -396,13 +425,6 @@ class OaxacaResults:
         if not hasattr(self, "total_difference"):
             return "<p><strong>OaxacaResults</strong> (not yet computed - call two_fold() first)</p>"
 
-        if self.direction == "group0 - group1":
-            direction_text = f"{self._oaxaca.groups_[0]} - {self._oaxaca.groups_[1]}"
-        else:
-            direction_text = f"{self._oaxaca.groups_[1]} - {self._oaxaca.groups_[0]}"
-
-        detailed_table_html = self._create_detailed_contributions_table(column_names, display_len, sort)
-
         removal_section = ""
         if self.removal_info["has_removals"]:
             removal_section = f"""
@@ -418,16 +440,12 @@ class OaxacaResults:
 
         html = f"""
         <div style="font-family: Arial, sans-serif; max-width: 1000px;">
-            <h3 style="color: #2c3e50; margin-bottom: 15px;">Oaxaca-Blinder Decomposition Results</h3>
-
-            <div style="margin-bottom: 15px;">
-                <p style="margin: 3px 0;"><strong>Group Variable:</strong> {self._oaxaca.group_variable} | <strong>Groups:</strong> {self._oaxaca.groups_[0]} vs {self._oaxaca.groups_[1]} | <strong>Direction:</strong> {direction_text}</p>
-            </div>
+            {self._create_header_html()}
 
             {removal_section}
 
             <h4 style="color: #2c3e50; margin-top: 20px; margin-bottom: 10px;">Detailed Variable Contributions</h4>
-            {detailed_table_html}
+            {self._create_detailed_contributions_table(column_names, display_len, sort)}
 
             <div style="margin-top: 15px; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
                 <p style="margin: 0; font-size: 0.9em; color: #666;">
@@ -498,6 +516,35 @@ class TwoFoldResults(OaxacaResults):
                 "unexplained_detailed": self.unexplained_detailed,
             },
         )
+
+    def _create_header_html(self) -> str:
+        """Create the header HTML section for TwoFold decomposition results with weight information.
+
+        Returns
+        -------
+        str
+            HTML string for the header section including weight information
+        """
+        if self.direction == "group0 - group1":
+            direction_text = f"{self._oaxaca.groups_[0]} - {self._oaxaca.groups_[1]}"
+        else:
+            direction_text = f"{self._oaxaca.groups_[1]} - {self._oaxaca.groups_[0]}"
+
+        # Format weights information
+        weight_text = ""
+        if self.weights:
+            weight_items = []
+            for group, weight in self.weights.items():
+                weight_items.append(f"Group {group}: {weight:.3f}")
+            weight_text = f" | <strong>Weights:</strong> {', '.join(weight_items)}"
+
+        return f"""
+            <h3 style="color: #2c3e50; margin-bottom: 15px;">Oaxaca-Blinder Decomposition Results</h3>
+
+            <div style="margin-bottom: 15px;">
+                <p style="margin: 3px 0;"><strong>Group Variable:</strong> {self._oaxaca.group_variable} | <strong>Groups:</strong> {self._oaxaca.groups_[0]} vs {self._oaxaca.groups_[1]} | <strong>Direction:</strong> {direction_text}{weight_text}</p>
+            </div>
+        """
 
     def _repr_html_(self) -> str:
         """Rich HTML display for Jupyter notebooks with detailed information."""
@@ -720,6 +767,27 @@ class ThreeFoldResults(OaxacaResults):
                 "interaction_detailed": self.interaction_detailed,
             },
         )
+
+    def _create_header_html(self) -> str:
+        """Create the header HTML section for ThreeFold decomposition results.
+
+        Returns
+        -------
+        str
+            HTML string for the header section
+        """
+        if self.direction == "group0 - group1":
+            direction_text = f"{self._oaxaca.groups_[0]} - {self._oaxaca.groups_[1]}"
+        else:
+            direction_text = f"{self._oaxaca.groups_[1]} - {self._oaxaca.groups_[0]}"
+
+        return f"""
+            <h3 style="color: #2c3e50; margin-bottom: 15px;">Oaxaca-Blinder Decomposition Results (Three-fold)</h3>
+
+            <div style="margin-bottom: 15px;">
+                <p style="margin: 3px 0;"><strong>Group Variable:</strong> {self._oaxaca.group_variable} | <strong>Groups:</strong> {self._oaxaca.groups_[0]} vs {self._oaxaca.groups_[1]} | <strong>Direction:</strong> {direction_text}</p>
+            </div>
+        """
 
     def _repr_html_(self) -> str:
         """Rich HTML display for Jupyter notebooks with detailed information."""
