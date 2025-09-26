@@ -68,6 +68,7 @@ class Oaxaca:
         self.coef_ = {}
         self.models_ = {}
         self.group_stats_ = {}
+        self.model_summary_stats_ = {}
 
         # Fit separate models for each group
         for group in self.groups_:
@@ -101,6 +102,13 @@ class Oaxaca:
                 "mean_X": X_group.mean(),
                 "std_y": float(y_group.std().iloc[0]),
                 "r_squared": model.rsquared,
+            }
+
+            # Store model summary statistics before removing data
+            self.model_summary_stats_[group] = {
+                "bse": model.bse.copy(),
+                "tvalues": model.tvalues.copy(),
+                "pvalues": model.pvalues.copy(),
             }
 
             # Remove training data from model object to reduce memory usage

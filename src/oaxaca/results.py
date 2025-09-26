@@ -536,6 +536,7 @@ class TwoFoldResults(OaxacaResults):
         for _, group in enumerate(self._oaxaca.groups_):
             model = self._oaxaca.models_[group]
             group_stats = self._oaxaca.group_stats_[group]
+            summary_stats = self._oaxaca.model_summary_stats_[group]
 
             print(f"\nGroup: {group}")
             print("-" * 40)
@@ -549,9 +550,9 @@ class TwoFoldResults(OaxacaResults):
             print("-" * 61)
 
             for var_name, coeff in model.params.items():
-                std_err = model.bse[var_name]
-                t_stat = model.tvalues[var_name]
-                p_value = model.pvalues[var_name]
+                std_err = summary_stats["bse"][var_name]
+                t_stat = summary_stats["tvalues"][var_name]
+                p_value = summary_stats["pvalues"][var_name]
 
                 # Truncate variable name if display_len is specified
                 display_var_name = _truncate_variable_name(var_name, display_len)
@@ -577,9 +578,6 @@ class TwoFoldResults(OaxacaResults):
         # Get coefficients for both groups
         coef_first = self._oaxaca.coef_[first_group]
         coef_second = self._oaxaca.coef_[second_group]
-
-        # Ensure conformable dimensions (handle missing coefficients)
-        coef_first, coef_second = self._oaxaca._ensure_conformable_dimensions(coef_first, coef_second)
 
         # Calculate difference
         coef_diff = coef_first - coef_second
