@@ -292,6 +292,151 @@ class OaxacaResults:
     def __repr__(self):
         return f"OaxacaResults(groups={self._oaxaca.groups_}, group_variable='{self._oaxaca.group_variable}')"
 
+    def print_ols(self, display_len: Optional[int] = None):
+        """Print OLS regression results for each group.
+
+        Args:
+            display_len: Maximum length for variable names in output tables. If provided,
+                variable names will be truncated to this length.
+        """
+        print("OLS Regression Results by Group")
+        print("=" * 60)
+
+        for _, group in enumerate(self._oaxaca.groups_):
+            model = self._oaxaca.models_[group]
+            group_stats = self._oaxaca.group_stats_[group]
+            summary_stats = self._oaxaca.model_summary_stats_[group]
+
+            print(f"\nGroup: {group}")
+            print("-" * 40)
+            print(f"Number of observations: {group_stats['n_obs']}")
+            print(f"R-squared: {group_stats['r_squared']:.4f}")
+            print(f"Mean of dependent variable: {group_stats['mean_y']:.4f}")
+            print(f"Std of dependent variable: {group_stats['std_y']:.4f}")
+
+            print("\nCoefficients:")
+            print(f"{'Variable':<40} {'Coeff':>10} {'Std Err':>10} {'t':>8} {'P>|t|':>8}")
+            print("-" * 61)
+
+            for var_name, coeff in model.params.items():
+                std_err = summary_stats["bse"][var_name]
+                t_stat = summary_stats["tvalues"][var_name]
+                p_value = summary_stats["pvalues"][var_name]
+
+                # Truncate variable name if display_len is specified
+                display_var_name = _truncate_variable_name(var_name, display_len)
+
+                print(f"{display_var_name:<40} {coeff:>10.4f} {std_err:>10.4f} {t_stat:>8.3f} {p_value:>8.3f}")
+
+        print("Coefficient Comparison Between Groups")
+        print("=" * 80)
+
+        # Get the two groups
+        group_0, group_1 = self._oaxaca.groups_
+
+        # Determine column order based on direction
+        if self.direction == "group0 - group1":
+            first_group, second_group = group_0, group_1
+            first_label, second_label = f"Group {group_0}", f"Group {group_1}"
+            diff_label = f"{group_0} - {group_1}"
+        else:  # "group1 - group0"
+            first_group, second_group = group_1, group_0
+            first_label, second_label = f"Group {group_1}", f"Group {group_0}"
+            diff_label = f"{group_1} - {group_0}"
+
+        # Get coefficients for both groups
+        coef_first = self._oaxaca.coef_[first_group]
+        coef_second = self._oaxaca.coef_[second_group]
+
+        # Calculate difference
+        coef_diff = coef_first - coef_second
+
+        print(f"Direction: {diff_label}")
+        print()
+
+        # Print table header
+        header = f"{'Variable':<40} {first_label:>12} {second_label:>12} {'Difference':>12}"
+        print(header)
+        print("-" * len(header))
+
+        # Print coefficients for each variable
+        for var_name in coef_first.index:
+            first_coef = coef_first[var_name]
+            second_coef = coef_second[var_name]
+            diff_coef = coef_diff[var_name]
+
+            # Truncate variable name if display_len is specified
+            display_var_name = _truncate_variable_name(var_name, display_len)
+
+            print(f"{display_var_name:<40} {first_coef:>12.4f} {second_coef:>12.4f} {diff_coef:>12.4f}")
+
+    def x_difference_table(self) -> pd.DataFrame:
+        """Create a table showing the difference in X (predictor variables) between the two groups.
+
+        Returns:
+            A table with columns for Variable, Group 0 Mean, Group 1 Mean, and Difference.
+        """
+        # Create DataFrame using the actual mean_X values used in decomposition
+        groups = self._oaxaca.groups_
+        df = pd.DataFrame({
+            "Variable": self.mean_X_0.index.tolist(),
+            f"Group {groups[0]} Mean": self.mean_X_0,
+            f"Group {groups[1]} Mean": self.mean_X_1,
+            "Difference": self.X_diff,
+        })
+
+        return df
+
+    def print_x(self, display_len: Optional[int] = None):
+        """Print a formatted table showing the difference in X (predictor variables) between the two groups.
+
+        Args:
+            display_len: Maximum length for variable names in output tables. If provided,
+                variable names will be truncated to this length.
+        """
+        print("Difference in X (Predictor Variables) Between Groups")
+        print("=" * 80)
+        groups = self._oaxaca.groups_
+        print(f"Group Variable: {self._oaxaca.group_variable}")
+        print(f"Groups: {groups[0]} (Group 0) vs {groups[1]} (Group 1)")
+
+        # Show direction information based on self.direction
+        if self.direction == "group0 - group1":
+            difference_text = f"Group {groups[0]} Mean - Group {groups[1]} Mean"
+        else:
+            difference_text = f"Group {groups[1]} Mean - Group {groups[0]} Mean"
+
+        print(f"Difference = {difference_text}")
+        print()
+
+        df = self.x_difference_table()
+
+        # Print formatted table
+        if self.direction == "group0 - group1":
+            header = (
+                f"{'Variable':<40} {str(groups[0]) + ' Mean':>15} {str(groups[1]) + ' Mean':>15} {'Difference':>15}"
+            )
+        elif self.direction == "group1 - group0":
+            header = (
+                f"{'Variable':<40} {str(groups[1]) + ' Mean':>15} {str(groups[0]) + ' Mean':>15} {'Difference':>15}"
+            )
+        print(header)
+        print("-" * len(header))
+
+        for _, row in df.iterrows():
+            var_name = row["Variable"]
+            group_0_mean = row[f"Group {self._oaxaca.groups_[0]} Mean"]
+            group_1_mean = row[f"Group {self._oaxaca.groups_[1]} Mean"]
+            difference = row["Difference"]
+
+            # Truncate variable name if display_len is specified
+            display_var_name = _truncate_variable_name(var_name, display_len)
+
+            if self.direction == "group0 - group1":
+                print(f"{display_var_name:<40} {group_0_mean:>15.4f} {group_1_mean:>15.4f} {difference:>15.4f}")
+            elif self.direction == "group1 - group0":
+                print(f"{display_var_name:<40} {group_1_mean:>15.4f} {group_0_mean:>15.4f} {difference:>15.4f}")
+
     def _create_detailed_contributions_table(
         self, column_names: list[str], display_len: Optional[int] = None, sort: bool = True
     ) -> str:
@@ -320,7 +465,11 @@ class OaxacaResults:
         lines.append("<thead>")
         lines.append('<tr style="background-color: #f0f0f0;">')
 
-        for header in ["Variable", "Explained", "Expl %", "Unexplained", "Unexpl %", "Total", "Tot %"]:
+        header_names = ["Variable"] + [
+            col.replace("_detailed", "").replace("_pct", "%").title() for col in column_names
+        ]
+
+        for header in header_names:
             lines.append(_format_cell(header, "header"))
 
         lines.append("</tr>")
@@ -500,11 +649,17 @@ class TwoFoldResults(OaxacaResults):
                 weight_items.append(f"Group {group}: {weight:.3f}")
             weight_text = f" | <strong>Weights:</strong> {', '.join(weight_items)}"
 
+        # Get mean outcomes for each group
+        groups = self._oaxaca.groups_
+        mean_y_0 = self._oaxaca.group_stats_[groups[0]]["mean_y"]
+        mean_y_1 = self._oaxaca.group_stats_[groups[1]]["mean_y"]
+
         return f"""
             <h3 style="color: #2c3e50; margin-bottom: 15px;">Oaxaca-Blinder Decomposition Results</h3>
 
             <div style="margin-bottom: 15px;">
                 <p style="margin: 3px 0;"><strong>Group Variable:</strong> {self._oaxaca.group_variable} | <strong>Groups:</strong> {self._oaxaca.groups_[0]} vs {self._oaxaca.groups_[1]} | <strong>Direction:</strong> {direction_text}{weight_text}</p>
+                <p style="margin: 3px 0;"><strong>Mean Outcomes:</strong> Group {groups[0]}: {mean_y_0:.4f} | Group {groups[1]}: {mean_y_1:.4f} | <strong>Difference:</strong> {self.total_difference:.4f}</p>
             </div>
         """
 
@@ -522,151 +677,6 @@ class TwoFoldResults(OaxacaResults):
             "total_pct",
         ]
         return OaxacaResults.to_html(self, column_names=column_names, display_len=display_len, sort=sort)
-
-    def print_ols(self, display_len: Optional[int] = None):
-        """Print OLS regression results for each group.
-
-        Args:
-            display_len: Maximum length for variable names in output tables. If provided,
-                variable names will be truncated to this length.
-        """
-        print("OLS Regression Results by Group")
-        print("=" * 60)
-
-        for _, group in enumerate(self._oaxaca.groups_):
-            model = self._oaxaca.models_[group]
-            group_stats = self._oaxaca.group_stats_[group]
-            summary_stats = self._oaxaca.model_summary_stats_[group]
-
-            print(f"\nGroup: {group}")
-            print("-" * 40)
-            print(f"Number of observations: {group_stats['n_obs']}")
-            print(f"R-squared: {group_stats['r_squared']:.4f}")
-            print(f"Mean of dependent variable: {group_stats['mean_y']:.4f}")
-            print(f"Std of dependent variable: {group_stats['std_y']:.4f}")
-
-            print("\nCoefficients:")
-            print(f"{'Variable':<40} {'Coeff':>10} {'Std Err':>10} {'t':>8} {'P>|t|':>8}")
-            print("-" * 61)
-
-            for var_name, coeff in model.params.items():
-                std_err = summary_stats["bse"][var_name]
-                t_stat = summary_stats["tvalues"][var_name]
-                p_value = summary_stats["pvalues"][var_name]
-
-                # Truncate variable name if display_len is specified
-                display_var_name = _truncate_variable_name(var_name, display_len)
-
-                print(f"{display_var_name:<40} {coeff:>10.4f} {std_err:>10.4f} {t_stat:>8.3f} {p_value:>8.3f}")
-
-        print("Coefficient Comparison Between Groups")
-        print("=" * 80)
-
-        # Get the two groups
-        group_0, group_1 = self._oaxaca.groups_
-
-        # Determine column order based on direction
-        if self.direction == "group0 - group1":
-            first_group, second_group = group_0, group_1
-            first_label, second_label = f"Group {group_0}", f"Group {group_1}"
-            diff_label = f"{group_0} - {group_1}"
-        else:  # "group1 - group0"
-            first_group, second_group = group_1, group_0
-            first_label, second_label = f"Group {group_1}", f"Group {group_0}"
-            diff_label = f"{group_1} - {group_0}"
-
-        # Get coefficients for both groups
-        coef_first = self._oaxaca.coef_[first_group]
-        coef_second = self._oaxaca.coef_[second_group]
-
-        # Calculate difference
-        coef_diff = coef_first - coef_second
-
-        print(f"Direction: {diff_label}")
-        print()
-
-        # Print table header
-        header = f"{'Variable':<40} {first_label:>12} {second_label:>12} {'Difference':>12}"
-        print(header)
-        print("-" * len(header))
-
-        # Print coefficients for each variable
-        for var_name in coef_first.index:
-            first_coef = coef_first[var_name]
-            second_coef = coef_second[var_name]
-            diff_coef = coef_diff[var_name]
-
-            # Truncate variable name if display_len is specified
-            display_var_name = _truncate_variable_name(var_name, display_len)
-
-            print(f"{display_var_name:<40} {first_coef:>12.4f} {second_coef:>12.4f} {diff_coef:>12.4f}")
-
-    def x_difference_table(self) -> pd.DataFrame:
-        """Create a table showing the difference in X (predictor variables) between the two groups.
-
-        Returns:
-            A table with columns for Variable, Group 0 Mean, Group 1 Mean, and Difference.
-        """
-        # Create DataFrame using the actual mean_X values used in decomposition
-        groups = self._oaxaca.groups_
-        df = pd.DataFrame({
-            "Variable": self.explained_detailed.index.tolist(),
-            f"Group {groups[0]} Mean": self.mean_X_0,
-            f"Group {groups[1]} Mean": self.mean_X_1,
-            "Difference": self.X_diff,
-        })
-
-        return df
-
-    def print_x(self, display_len: Optional[int] = None):
-        """Print a formatted table showing the difference in X (predictor variables) between the two groups.
-
-        Args:
-            display_len: Maximum length for variable names in output tables. If provided,
-                variable names will be truncated to this length.
-        """
-        print("Difference in X (Predictor Variables) Between Groups")
-        print("=" * 80)
-        groups = self._oaxaca.groups_
-        print(f"Group Variable: {self._oaxaca.group_variable}")
-        print(f"Groups: {groups[0]} (Group 0) vs {groups[1]} (Group 1)")
-
-        # Show direction information based on self.direction
-        if self.direction == "group0 - group1":
-            difference_text = f"Group {groups[0]} Mean - Group {groups[1]} Mean"
-        else:
-            difference_text = f"Group {groups[1]} Mean - Group {groups[0]} Mean"
-
-        print(f"Difference = {difference_text}")
-        print()
-
-        df = self.x_difference_table()
-
-        # Print formatted table
-        if self.direction == "group0 - group1":
-            header = (
-                f"{'Variable':<40} {str(groups[0]) + ' Mean':>15} {str(groups[1]) + ' Mean':>15} {'Difference':>15}"
-            )
-        elif self.direction == "group1 - group0":
-            header = (
-                f"{'Variable':<40} {str(groups[1]) + ' Mean':>15} {str(groups[0]) + ' Mean':>15} {'Difference':>15}"
-            )
-        print(header)
-        print("-" * len(header))
-
-        for _, row in df.iterrows():
-            var_name = row["Variable"]
-            group_0_mean = row[f"Group {self._oaxaca.groups_[0]} Mean"]
-            group_1_mean = row[f"Group {self._oaxaca.groups_[1]} Mean"]
-            difference = row["Difference"]
-
-            # Truncate variable name if display_len is specified
-            display_var_name = _truncate_variable_name(var_name, display_len)
-
-            if self.direction == "group0 - group1":
-                print(f"{display_var_name:<40} {group_0_mean:>15.4f} {group_1_mean:>15.4f} {difference:>15.4f}")
-            elif self.direction == "group1 - group0":
-                print(f"{display_var_name:<40} {group_1_mean:>15.4f} {group_0_mean:>15.4f} {difference:>15.4f}")
 
 
 class ThreeFoldResults(OaxacaResults):
@@ -723,11 +733,17 @@ class ThreeFoldResults(OaxacaResults):
         else:
             direction_text = f"{self._oaxaca.groups_[1]} - {self._oaxaca.groups_[0]}"
 
+        # Get mean outcomes for each group
+        groups = self._oaxaca.groups_
+        mean_y_0 = self._oaxaca.group_stats_[groups[0]]["mean_y"]
+        mean_y_1 = self._oaxaca.group_stats_[groups[1]]["mean_y"]
+
         return f"""
             <h3 style="color: #2c3e50; margin-bottom: 15px;">Oaxaca-Blinder Decomposition Results (Three-fold)</h3>
 
             <div style="margin-bottom: 15px;">
                 <p style="margin: 3px 0;"><strong>Group Variable:</strong> {self._oaxaca.group_variable} | <strong>Groups:</strong> {self._oaxaca.groups_[0]} vs {self._oaxaca.groups_[1]} | <strong>Direction:</strong> {direction_text}</p>
+                <p style="margin: 3px 0;"><strong>Mean Outcomes:</strong> Group {groups[0]}: {mean_y_0:.4f} | Group {groups[1]}: {mean_y_1:.4f} | <strong>Difference:</strong> {self.total_difference:.4f}</p>
             </div>
         """
 
