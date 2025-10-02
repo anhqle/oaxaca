@@ -62,5 +62,18 @@ jobs:
       - name: Set up the environment
         uses: ./.github/actions/setup-python-env
 
+      - name: Install documentation dependencies
+        # uv by default only installs the main dependency set; we need dev group for mkdocs & plugins
+        run: uv sync --group dev
+
+      - name: Verify docs directory exists
+        run: |
+          if [ ! -d docs ]; then
+            echo "docs directory missing. Listing repository root for debugging:" >&2
+            ls -al
+            exit 1
+          fi
+          echo "Found docs directory:" && ls -1 docs
+
       - name: Deploy documentation
         run: uv run mkdocs gh-deploy --force
