@@ -191,7 +191,7 @@ class Oaxaca:
         Args:
             weights: Weights for the non-discriminatory coefficient vector, where keys are
                 the group values and values are the corresponding weights.
-            gu_adjustment: Type of [Gardeazabal and Ugidos (2004)](index.md#the-omitted-base-category-problem) adjustment to apply.
+            gu_adjustment: Type of [Gardeazabal and Ugidos (2004)](omitted_base_category_problem.md) adjustment to apply.
 
                 - "none": No adjustment
                 - "unweighted": Apply unweighted GU adjustment
@@ -259,7 +259,7 @@ class Oaxaca:
         """Perform three-fold decomposition.
 
         Args:
-            gu_adjustment: Type of [Gardeazabal and Ugidos (2004)](index.md#the-omitted-base-category-problem) adjustment to apply.
+            gu_adjustment: Type of [Gardeazabal and Ugidos (2004)](omitted_base_category_problem.md) adjustment to apply.
 
                 - "none": No adjustment
                 - "unweighted": Apply unweighted GU adjustment

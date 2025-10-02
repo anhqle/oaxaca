@@ -10,6 +10,7 @@ copyright: Maintained by <a href="https://anhqle.com">anhqle</a>.
 nav:
   - Home: index.md
   - Getting Started: getting_started.ipynb
+  - The omitted base category problem: omitted_base_category_problem.md
   - Modules: modules.md
 plugins:
   - search
