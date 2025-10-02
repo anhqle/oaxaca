@@ -14,7 +14,7 @@ nav:
 plugins:
   - search
   - mkdocs-jupyter:
-      execute: true
+      execute: false
   - mkdocstrings:
       handlers:
         python:

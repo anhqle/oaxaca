@@ -42,9 +42,9 @@ class Oaxaca:
         """Fit the Oaxaca-Blinder decomposition model.
 
         Args:
-            formula: The formula for the regression model.
-            data: The data containing all variables.
-            group_variable: The name of the column in data that contains the group indicator.
+            formula: R-style formula for the regression model.
+            data:
+            group_variable: The column that contains the group indicator.
 
         Returns:
             The fitted Oaxaca object for method chaining.
@@ -191,11 +191,17 @@ class Oaxaca:
         Args:
             weights: Weights for the non-discriminatory coefficient vector, where keys are
                 the group values and values are the corresponding weights.
-            gu_adjustment: Type of Gardeazabal and Ugidos (2004) adjustment to apply.
-            direction: Direction of the decomposition. Options are:
-                - "group0 - group1": Decompose group0 - group1 (default)
-                - "group1 - group0": Decompose group1 - group0
-                Where group0 is the first group alphabetically and group1 is the second.
+            gu_adjustment: Type of [Gardeazabal and Ugidos (2004)](index.md#the-omitted-base-category-problem) adjustment to apply.
+
+                - "none": No adjustment
+                - "unweighted": Apply unweighted GU adjustment
+                - "weighted": Apply weighted GU adjustment
+
+
+            direction: Direction of the decomposition.
+
+                - "group0 - group1"
+                - "group1 - group0"
 
         Returns:
             A new TwoFoldResults object with decomposition results.
@@ -253,15 +259,17 @@ class Oaxaca:
         """Perform three-fold decomposition.
 
         Args:
-            gu_adjustment: Type of Gardeazabal and Ugidos (2004) adjustment to apply:
-                - "none": No adjustment (default)
+            gu_adjustment: Type of [Gardeazabal and Ugidos (2004)](index.md#the-omitted-base-category-problem) adjustment to apply.
+
+                - "none": No adjustment
                 - "unweighted": Apply unweighted GU adjustment
                 - "weighted": Apply weighted GU adjustment
-            direction: Direction of the decomposition. Options are:
-                - "group0 - group1": Decompose group0 - group1 (default)
-                - "group1 - group0": Decompose group1 - group0
-                Where group0 is the first group alphabetically and group1 is the second.
 
+
+            direction: Direction of the decomposition.
+
+                - "group0 - group1"
+                - "group1 - group0"
         Returns:
             A new ThreeFoldResults object with decomposition results.
         """
