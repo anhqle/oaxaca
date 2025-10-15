@@ -358,16 +358,18 @@ class Oaxaca:
 
             # Convert to list since pandas can't accept set as index
             dummies_exclusive_to_this_group = list(set(dummies(X_model_spec[this])) - set(dummies(X_model_spec[other])))
-            rows_to_remove = (X[this].loc[:, dummies_exclusive_to_this_group] == 1).any(axis=1)
+            rows_to_remove = (
+                X[this].loc[(X[this].loc[:, dummies_exclusive_to_this_group] == 1).any(axis=1), :].index.tolist()
+            )
 
             # Compute scalar outcomes and share as floats for easier downstream use
             outcome_pre_removal_val = float(y[this].mean().iloc[0])
-            outcome_post_removal_val = float(y[this][~rows_to_remove].mean().iloc[0])
+            outcome_post_removal_val = float(y[this].drop(rows_to_remove).mean().iloc[0])
             # May be NaN if no rows removed; float() preserves NaN
             outcome_among_removed_val = (
-                float(y[this][rows_to_remove].mean().iloc[0]) if len(y[this][rows_to_remove]) > 0 else float("nan")
+                float(y[this].loc[rows_to_remove].mean().iloc[0]) if len(rows_to_remove) > 0 else float("nan")
             )
-            share_removed_val = float(rows_to_remove.mean())
+            share_removed_val = len(rows_to_remove) / len(y[this])
             mean_adjustment_val = outcome_pre_removal_val - outcome_post_removal_val
 
             self.dummy_removal_result_[this] = {
@@ -382,7 +384,7 @@ class Oaxaca:
             # In addition to the full-rank model matrix in OLS below,
             #   calculate the mean of all categories for GU adjustment
             # We do this opportunistically by using the cleaned data
-            cleaned_X = X[this].loc[~rows_to_remove, :].drop(dummies_exclusive_to_this_group, axis=1)
+            cleaned_X = X[this].drop(rows_to_remove).drop(dummies_exclusive_to_this_group, axis=1)
             self.group_stats_all_categories_[this] = {
                 "mean_X": cleaned_X.mean(),
             }
@@ -391,7 +393,9 @@ class Oaxaca:
         for group in self.groups_:
             group_mask = data[self.group_variable] == group
             data_group = data[group_mask]
-            harmonized_data_list.append(data_group.loc[~self.dummy_removal_result_[group]["rows_to_remove"], :])
+            rows_to_remove = self.dummy_removal_result_[group]["rows_to_remove"]
+            # Drop rows by index
+            harmonized_data_list.append(data_group.drop(rows_to_remove, errors="ignore"))
         return pd.concat(harmonized_data_list, axis=0, ignore_index=True)
 
     def _apply_gu_adjustment(self, coef: pd.Series, weight: Optional[pd.Series] = None) -> pd.Series:

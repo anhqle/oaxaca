@@ -246,13 +246,35 @@ def test_common_support():
     model = Oaxaca()
     model.fit("outcome ~ continuous_var + C(category)", data, group_variable="group")
 
+    # Check that rows_to_remove correctly identifies rows with categories not in common support
+    # Category A only appears in group 0, category D only appears in group 1
+    rows_with_A = data[data["category"] == "A"].index.tolist()
+    rows_with_D = data[data["category"] == "D"].index.tolist()
+
+    assert hasattr(model, "dummy_removal_result_"), "Model should have dummy_removal_result_ attribute after fitting"
+
+    # Check group 0: should remove rows with category A (exclusive to group 0)
+    assert set(model.dummy_removal_result_[0]["rows_to_remove"]) == set(rows_with_A), (
+        f"Group 0 should remove rows with category A. "
+        f"Expected: {set(rows_with_A)}, Got: {set(model.dummy_removal_result_[0]['rows_to_remove'])}"
+    )
+
+    # Check group 1: should remove rows with category D (exclusive to group 1)
+    assert set(model.dummy_removal_result_[1]["rows_to_remove"]) == set(rows_with_D), (
+        f"Group 1 should remove rows with category D. "
+        f"Expected: {set(rows_with_D)}, Got: {set(model.dummy_removal_result_[1]['rows_to_remove'])}"
+    )
+
     # Run decomposition - this should work without dimension mismatch
     results = model.two_fold(weights={0: 0.5, 1: 0.5})
     assert np.isclose(results.total_difference, results.explained + results.unexplained, rtol=1e-10)
-    # Verify that all categorical dummy variables are present in results
-    # even if they don't exist in both groups
+    # Verify that categorical variables from common support (B and C) are present in results
+    # B is the base category, so we check for C
     category_vars = [col for col in results.explained_detailed.index if "C(category)" in col]
-    assert len(category_vars) > 0  # Should have categorical variables
+    assert any("C(category)[T.C]" in var for var in category_vars), "Category C should be present in results"
+    # Verify that categories A and D (exclusive to one group) are NOT in results
+    assert not any("C(category)[T.A]" in var for var in category_vars), "Category A should not be present in results"
+    assert not any("C(category)[T.D]" in var for var in category_vars), "Category D should not be present in results"
 
     # Run decomposition with GU adjustment as well - this should not crash due to dimension mismatch
     results_gu = model.two_fold(weights={0: 0.5, 1: 0.5}, gu_adjustment="unweighted")
