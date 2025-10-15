@@ -4,7 +4,7 @@ This is a well-known problem in the literature (see Jann, 2008, p. 9 for a discu
 
 1. The total `explained` and `unexplained` parts are invariant to the omitted group
 2. The `explained` part of a categorical variable is invariant. The `unexplained` part is NOT invariant.
-3. Both the `explained` and `unexplained` parts of the dummy within the categorical variable is NOT invariant. 
+3. Both the `explained` and `unexplained` parts of the dummy within the categorical variable is NOT invariant.
 
 The package offers three solutions (via the `gu_adjustment` option):
 
